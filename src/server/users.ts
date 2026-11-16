@@ -64,7 +64,9 @@ export async function createStaffUser(db: Database, actorId: string, input: z.in
   const passwordHash = await hashPassword(input.password);
   try {
     return await db.transaction(async (tx) => {
-      const taken = await tx.select({ slot: users.slot }).from(users).for("update");
+      // Blocks concurrent account creation so two admins' requests cannot pick the same slot.
+      await tx.execute(sql`LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE`);
+      const taken = await tx.select({ slot: users.slot }).from(users);
       const used = new Set(taken.map((r) => r.slot));
       const slot = [2, 3, 4].find((s) => !used.has(s));
       if (!slot) throw new AppError("All four accounts are already in use.", "CONFLICT");

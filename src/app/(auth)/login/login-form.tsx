@@ -31,7 +31,8 @@ export function LoginForm({ next }: { next: string }) {
   });
 
   return (
-    <form onSubmit={onSubmit} className="space-y-5" noValidate>
+    // method="post" keeps the password out of the URL if someone submits before the page has loaded its scripts.
+    <form onSubmit={onSubmit} method="post" className="space-y-5" noValidate>
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
         <Input id="email" type="email" autoComplete="email" autoFocus aria-invalid={!!errors.email} {...form.register("email")} />

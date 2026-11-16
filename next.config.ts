@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   // Every staff page is per-user and per-request, so classic dynamic rendering fits better
   // than Cache Components here.
   cacheComponents: false,
+  // Lets end-to-end tests run their own server next to `pnpm dev`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   serverExternalPackages: ["sharp", "@node-rs/argon2", "pg"],
   // Fonts for the marketing-card template are read from disk at runtime.
   outputFileTracingIncludes: { "/**": ["./assets/fonts/**"] },

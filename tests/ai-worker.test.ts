@@ -123,3 +123,43 @@ describe("marketing card composition", () => {
     }
   });
 });
+
+describe("worker crash safety", () => {
+  it("never re-runs a job whose worker died on the last attempt", async () => {
+    const p = await createProduct(db, ids.staffId, productInput(), await testImage());
+    await db
+      .update(aiGenerationJobs)
+      .set({ status: "processing", attempts: 3, lockedUntil: new Date(Date.now() - 1000) })
+      .where(eq(aiGenerationJobs.productId, p.id));
+    expect(await claimNextJob(db)).toBeNull();
+    const { failAbandonedJobs } = await import("@/server/ai/worker");
+    expect(await failAbandonedJobs(db)).toBe(1);
+    const [job] = await db.select().from(aiGenerationJobs).where(eq(aiGenerationJobs.productId, p.id));
+    expect(job.status).toBe("failed");
+  });
+
+  it("drops the result of a worker that lost its job to another worker", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    setImageProviderForTests({
+      name: "slow",
+      async generate(req) {
+        await gate;
+        return Promise.all(Array.from({ length: req.count }, async () => ({ data: await testImage("#123456", 832, 1040), contentType: "image/jpeg" })));
+      },
+    });
+    const p = await createProduct(db, ids.staffId, productInput(), await testImage());
+    const first = runWorker({ db, maxJobs: 1 });
+    // Simulate the first worker's lock expiring and a second worker taking over the job.
+    await new Promise((r) => setTimeout(r, 300));
+    await db.update(aiGenerationJobs).set({ lockedUntil: new Date(Date.now() - 1000) }).where(eq(aiGenerationJobs.productId, p.id));
+    const taken = await claimNextJob(db);
+    expect(taken?.attempts).toBe(2);
+    release();
+    await first;
+    const imgs = await db.select().from(productImages).where(eq(productImages.productId, p.id));
+    expect(imgs.filter((i) => i.kind !== "original")).toHaveLength(0);
+    const [job] = await db.select().from(aiGenerationJobs).where(eq(aiGenerationJobs.productId, p.id));
+    expect([job.status, job.attempts]).toEqual(["processing", 2]);
+  });
+});

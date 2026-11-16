@@ -16,10 +16,10 @@ export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const user = await requirePageUser("dashboard.view");
-  const d = await dashboardData(db);
+  const seeOrders = can(user.role, "order.view");
+  const d = await dashboardData(db, { includeOrders: seeOrders });
   const s = d.stats;
   const cur = d.currency;
-  const seeOrders = can(user.role, "order.view");
   const seeActivity = can(user.role, "activity.view");
 
   return (
@@ -43,10 +43,20 @@ export default async function DashboardPage() {
         <Kpi icon={Boxes} label="Available pieces" value={formatNumber(s.available)} note={`${formatNumber(s.pieces)} on hand · ${formatNumber(s.reserved)} reserved`} />
         <Kpi icon={Wallet} label="Total purchase value" value={formatMoney(s.purchaseValue, cur)} note="cost of stock on hand" />
         <Kpi icon={CircleDollarSign} label="Potential sales value" value={formatMoney(s.salesValue, cur)} note="at target prices" />
-        <Kpi icon={TrendingUp} label="Estimated gross profit" value={formatMoney(s.estimatedProfit, cur)} note={`Realized: ${formatMoney(s.realizedProfit, cur)} from delivered orders`} accent />
+        <Kpi
+          icon={TrendingUp}
+          label="Estimated gross profit"
+          value={formatMoney(s.estimatedProfit, cur)}
+          note={seeOrders ? `Realized: ${formatMoney(s.realizedProfit, cur)} from delivered orders` : "if all stock sells at target prices"}
+          accent
+        />
         <Kpi icon={AlertTriangle} label="Low stock products" value={formatNumber(s.lowStock)} note={`${d.threshold} or fewer pieces left`} href="/inventory?stock=low" tone={s.lowStock ? "warn" : undefined} />
         <Kpi icon={PackageX} label="Out of stock" value={formatNumber(s.outOfStock)} note="no pieces available" href="/inventory?stock=out" tone={s.outOfStock ? "bad" : undefined} />
-        <Kpi icon={ShoppingBag} label="Orders" value={formatNumber(s.orders)} note={`${s.pendingOrders} pending`} href={seeOrders ? "/orders?status=pending" : undefined} tone={s.pendingOrders ? "warn" : undefined} />
+        {seeOrders ? (
+          <Kpi icon={ShoppingBag} label="Orders" value={formatNumber(s.orders)} note={`${s.pendingOrders} pending`} href="/orders?status=pending" tone={s.pendingOrders ? "warn" : undefined} />
+        ) : (
+          <Kpi icon={Boxes} label="Reserved pieces" value={formatNumber(s.reserved)} note="held for customer orders" href="/inventory" />
+        )}
       </section>
 
       <DashboardCharts movement={d.movement} byCategory={d.byCategory} byAudience={d.byAudience} />

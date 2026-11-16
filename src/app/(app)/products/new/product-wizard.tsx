@@ -19,7 +19,7 @@ import { applyServerErrors } from "@/lib/form-errors";
 import { AUDIENCE_HINT, AUDIENCE_LABEL, AUDIENCES, SIZE_LABEL, SIZES_BY_AUDIENCE, type Audience } from "@/lib/sizes";
 import { cn } from "@/lib/utils";
 import { DESCRIPTION_MAX, priceSummary, productInputSchema, type ProductInput } from "@/lib/validation/product";
-import { createProductAction } from "../actions";
+import { createProductAction, prepareUploadAction } from "../actions";
 
 type Created = { id: string; sku: string; publicUrl: string };
 
@@ -90,7 +90,23 @@ export function ProductWizard({ categories, currency }: { categories: { id: stri
       }
       const fd = new FormData();
       fd.set("data", JSON.stringify(values));
-      fd.set("image", image);
+      const ticket = await prepareUploadAction();
+      if (!ticket.ok) return void toast.error(ticket.error);
+      if (ticket.data.mode === "cloudinary") {
+        // Large photos go straight to Cloudinary instead of through the app server.
+        const up = new FormData();
+        for (const [k, v] of Object.entries(ticket.data.fields)) up.set(k, v);
+        up.set("file", image);
+        const r = await fetch(ticket.data.uploadUrl, { method: "POST", body: up }).catch(() => null);
+        const body = (await r?.json().catch(() => null)) as { public_id?: string; format?: string; error?: { message?: string } } | null;
+        if (!r?.ok || !body?.public_id || !body.format) {
+          setImageError(body?.error?.message ?? "The photo could not be uploaded. Check your connection and try again.");
+          return void toast.error("Photo upload failed");
+        }
+        fd.set("upload", JSON.stringify({ publicId: body.public_id, format: body.format, expires: ticket.data.expires, token: ticket.data.token }));
+      } else {
+        fd.set("image", image);
+      }
       const res = await createProductAction(fd);
       if (!res.ok) {
         if (res.fieldErrors?.image) setImageError(res.fieldErrors.image[0]);

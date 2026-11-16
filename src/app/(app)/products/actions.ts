@@ -13,6 +13,16 @@ import { db } from "@/server/db";
 import { AppError } from "@/server/errors";
 import { recordStockMovement, stockMovementSchema } from "@/server/inventory";
 import { createProduct, setProductArchived, setProductPublished, updateProduct } from "@/server/products";
+import { createUploadTicket, limitUploadTickets, resolveUploadedImage, uploadedImageSchema } from "@/server/uploads";
+
+/** Tells the browser where to upload the product photo (straight to Cloudinary when configured). */
+export async function prepareUploadAction() {
+  return runAction(async () => {
+    const user = await requirePermission("product.create");
+    await limitUploadTickets(db, user.id);
+    return createUploadTicket(user.id);
+  });
+}
 
 export async function createProductAction(formData: FormData) {
   return runAction(async () => {
@@ -24,12 +34,27 @@ export async function createProductAction(formData: FormData) {
       throw new AppError("The form data could not be read.", "VALIDATION");
     }
     const input = parseOrThrow(productInputSchema, raw);
-    const file = formData.get("image");
-    if (!(file instanceof File) || file.size === 0) {
-      throw new AppError("Upload a product picture.", "VALIDATION", { image: ["Upload a product picture"] });
-    }
     const { ip } = await requestMeta();
-    const created = await createProduct(db, user.id, input, Buffer.from(await file.arrayBuffer()), { ip });
+    let image: Buffer | { storageKey: string; data: Buffer };
+    const uploaded = formData.get("upload");
+    if (typeof uploaded === "string" && uploaded) {
+      // Photo went straight to Cloudinary; verify the signed ticket and the bytes.
+      let ticket: unknown;
+      try {
+        ticket = JSON.parse(uploaded);
+      } catch {
+        throw new AppError("The photo upload could not be read.", "VALIDATION", { image: ["Upload again"] });
+      }
+      const resolved = await resolveUploadedImage(user.id, parseOrThrow(uploadedImageSchema, ticket));
+      image = { storageKey: resolved.storageKey, data: resolved.data };
+    } else {
+      const file = formData.get("image");
+      if (!(file instanceof File) || file.size === 0) {
+        throw new AppError("Upload a product picture.", "VALIDATION", { image: ["Upload a product picture"] });
+      }
+      image = Buffer.from(await file.arrayBuffer());
+    }
+    const created = await createProduct(db, user.id, input, image, { ip });
     // Runs after the response is sent: the user never waits for AI generation.
     after(() => kickWorker());
     revalidatePath("/products");

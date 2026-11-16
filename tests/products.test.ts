@@ -1,4 +1,6 @@
-import { readdir, rm } from "node:fs/promises";
+import { readdir, readFile, rm } from "node:fs/promises";
+import sharp from "sharp";
+import { getPublicProduct } from "@/server/public-products";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { productInputSchema } from "@/lib/validation/product";
@@ -158,5 +160,112 @@ describe("listing and jobs", () => {
     expect(await enqueueGeneration(db, p.id, ids.adminId)).toBeNull();
     const jobs = await db.select().from(aiGenerationJobs).where(eq(aiGenerationJobs.productId, p.id));
     expect(jobs).toHaveLength(1);
+  });
+});
+
+describe("public images", () => {
+  it("serves a metadata-free copy of the original photo, never the raw upload", async () => {
+    const withExif = await sharp(await testImage())
+      .withExif({ IFD0: { Make: "SecretPhone", Artist: "Owner Name" } })
+      .jpeg()
+      .toBuffer();
+    expect(withExif.includes(Buffer.from("SecretPhone"))).toBe(true);
+    const p = await createProduct(db, ids.staffId, productInput(), withExif);
+    const pub = await getPublicProduct(db, p.slug);
+    const original = pub!.images.find((i) => i.kind === "original")!;
+    expect(original.url).toMatch(/\/derived\/[0-9a-f-]{36}\.webp$/);
+    const served = await readFile(`./storage-test/${original.url.replace("/api/files/", "")}`);
+    expect(served.includes(Buffer.from("SecretPhone"))).toBe(false);
+    expect(served.includes(Buffer.from("Owner Name"))).toBe(false);
+  });
+});
+
+describe("stored file safety", () => {
+  it("names derived copies so the original's address cannot be guessed from them", async () => {
+    const p = await createProduct(db, ids.staffId, productInput(), await testImage());
+    const [img] = await db.select().from(productImages).where(sql`product_id = ${p.id}`);
+    const originalName = img.storageKey.split("/").pop()!.replace(/\.[a-z]+$/, "");
+    for (const k of [img.thumbKey!, img.displayKey!]) {
+      expect(k).toMatch(/\/derived\//);
+      expect(k).not.toContain(originalName);
+    }
+  });
+
+  it("refuses to reuse an uploaded original and leaves the first product's files alone", async () => {
+    const { storage } = await import("@/server/storage");
+    const data = await testImage();
+    const key = `products/${crypto.randomUUID()}/original/${crypto.randomUUID()}.jpg`;
+    await storage().put(key, data, "image/jpeg");
+    const first = await createProduct(db, ids.staffId, productInput(), { storageKey: key, data });
+    await expect(createProduct(db, ids.staffId, productInput({ name: "Replay" }), { storageKey: key, data })).rejects.toThrow(/already used/);
+    const [img] = await db.select().from(productImages).where(sql`product_id = ${first.id}`);
+    for (const k of [img.storageKey, img.thumbKey!, img.displayKey!]) await expect(storage().get(k)).resolves.toBeTruthy();
+  });
+
+  it("a failed save with an uploaded photo leaves the original for the sweep and removes its own copies", async () => {
+    const { storage } = await import("@/server/storage");
+    const { sweepOrphanFiles } = await import("@/server/storage-maintenance");
+    const data = await testImage();
+    const folder = `products/${crypto.randomUUID()}`;
+    const key = `${folder}/original/${crypto.randomUUID()}.jpg`;
+    await storage().put(key, data, "image/jpeg");
+    const bad = productInput({ categoryId: "00000000-0000-4000-8000-000000000000" });
+    await expect(createProduct(db, ids.staffId, bad, { storageKey: key, data })).rejects.toThrow(/category/);
+    await expect(storage().get(key)).resolves.toBeTruthy();
+    expect(await readdir(`./storage-test/${folder}/derived`).catch(() => [])).toHaveLength(0);
+    await sweepOrphanFiles(db, { olderThanMs: -60_000 });
+    await expect(storage().get(key)).rejects.toThrow();
+  });
+
+  it("sweeps files nothing points at and keeps the rest", async () => {
+    const { storage } = await import("@/server/storage");
+    const { sweepOrphanFiles } = await import("@/server/storage-maintenance");
+    const p = await createProduct(db, ids.staffId, productInput(), await testImage());
+    const orphan = `products/${crypto.randomUUID()}/original/${crypto.randomUUID()}.jpg`;
+    await storage().put(orphan, await testImage(), "image/jpeg");
+    await sweepOrphanFiles(db, { olderThanMs: -60_000 });
+    await expect(storage().get(orphan)).rejects.toThrow();
+    const [img] = await db.select().from(productImages).where(sql`product_id = ${p.id}`);
+    for (const k of [img.storageKey, img.thumbKey!, img.displayKey!]) await expect(storage().get(k)).resolves.toBeTruthy();
+  });
+
+  it("refuses an upload whose claimed format differs from the real bytes", async () => {
+    const { storage } = await import("@/server/storage");
+    const { createUploadTicket, resolveUploadedImage } = await import("@/server/uploads");
+    process.env.CLOUDINARY_API_SECRET = "test-secret-for-signing";
+    process.env.STORAGE_DRIVER = "cloudinary";
+    const ticket = createUploadTicket(ids.staffId);
+    process.env.STORAGE_DRIVER = "local";
+    if (ticket.mode !== "cloudinary") throw new Error("expected a cloudinary ticket");
+    const png = await sharp(await testImage()).png().toBuffer();
+    await storage().put(`${ticket.publicId}.jpg`, png, "image/png");
+    const input = { publicId: ticket.publicId, format: "jpg" as const, expires: ticket.expires, token: ticket.token };
+    await expect(resolveUploadedImage(ids.staffId, input)).rejects.toThrow(/does not match/);
+    await expect(resolveUploadedImage(ids.adminId, input)).rejects.toThrow(/expired/); // another user's ticket
+    await expect(storage().get(`${ticket.publicId}.jpg`)).resolves.toBeTruthy(); // never deleted here
+  });
+
+  it("gives up on a photo whose display copy keeps failing, without blocking others", async () => {
+    const { backfillDisplayCopies } = await import("@/server/storage-maintenance");
+    const good = await createProduct(db, ids.staffId, productInput(), await testImage());
+    await db.update(productImages).set({ displayKey: null }).where(sql`product_id = ${good.id}`);
+    // Five newer broken rows (missing files) would otherwise fill every batch forever.
+    const p2 = await createProduct(db, ids.staffId, productInput(), await testImage());
+    for (let i = 0; i < 5; i++) {
+      await db.insert(productImages).values({ productId: p2.id, kind: "ai_model", storageKey: `products/x/ai/missing-${i}.png`, contentType: "image/png" });
+    }
+    for (let run = 0; run < 4; run++) await backfillDisplayCopies(db);
+    const [row] = await db.select().from(productImages).where(sql`product_id = ${good.id}`);
+    expect(row.displayKey).toMatch(/\/derived\//);
+  });
+
+  it("backfills display copies for photos saved before they existed", async () => {
+    const { backfillDisplayCopies } = await import("@/server/storage-maintenance");
+    const p = await createProduct(db, ids.staffId, productInput(), await testImage());
+    await db.update(productImages).set({ displayKey: null }).where(sql`product_id = ${p.id}`);
+    expect((await getPublicProduct(db, p.slug))!.images).toHaveLength(0); // hidden, never the raw original
+    expect(await backfillDisplayCopies(db)).toBe(1);
+    const pub = await getPublicProduct(db, p.slug);
+    expect(pub!.images[0].url).toMatch(/\/derived\//);
   });
 });

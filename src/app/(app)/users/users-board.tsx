@@ -161,7 +161,7 @@ function CreateForm({ onClose, onDone }: { onClose: () => void; onDone: () => vo
     onClose();
   });
   return (
-    <form onSubmit={submit} className="space-y-4" noValidate>
+    <form onSubmit={submit} method="post" className="space-y-4" noValidate>
       <DialogHeader>
         <DialogTitle>Add a user</DialogTitle>
         <DialogDescription>Users can add products and stock. They cannot delete data or manage settings.</DialogDescription>
@@ -190,7 +190,7 @@ function EditForm({ user, onClose, onDone }: { user: SlotUser; onClose: () => vo
     onClose();
   });
   return (
-    <form onSubmit={submit} className="space-y-4" noValidate>
+    <form onSubmit={submit} method="post" className="space-y-4" noValidate>
       <DialogHeader>
         <DialogTitle>Edit account</DialogTitle>
         <DialogDescription>Slot {user.slot} · {user.role === "admin" ? "Admin" : "User"}</DialogDescription>
@@ -217,7 +217,7 @@ function PasswordForm({ user, onClose }: { user: SlotUser; onClose: () => void }
     onClose();
   });
   return (
-    <form onSubmit={submit} className="space-y-4" noValidate>
+    <form onSubmit={submit} method="post" className="space-y-4" noValidate>
       <DialogHeader>
         <DialogTitle>Reset password</DialogTitle>
         <DialogDescription>{user.name} will be signed out of all devices.</DialogDescription>

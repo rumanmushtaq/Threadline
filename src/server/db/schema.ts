@@ -230,6 +230,10 @@ export const productImages = pgTable(
     kind: imageKindEnum("kind").notNull(),
     storageKey: varchar("storage_key", { length: 300 }).notNull(),
     thumbKey: varchar("thumb_key", { length: 300 }),
+    // Re-encoded copy without EXIF/GPS metadata; this is what customers see.
+    displayKey: varchar("display_key", { length: 300 }),
+    // Failed attempts to create the display copy (the backfill gives up after a few).
+    displayAttempts: smallint("display_attempts").notNull().default(0),
     contentType: varchar("content_type", { length: 40 }).notNull(),
     width: integer("width"),
     height: integer("height"),
@@ -237,7 +241,11 @@ export const productImages = pgTable(
     variant: smallint("variant").notNull().default(0),
     createdAt: createdAt(),
   },
-  (t) => [index("product_images_product_idx").on(t.productId, t.kind, t.createdAt)],
+  (t) => [
+    index("product_images_product_idx").on(t.productId, t.kind, t.createdAt),
+    // One stored file belongs to exactly one image row (stops upload-ticket replays).
+    uniqueIndex("product_images_storage_key_unique").on(t.storageKey),
+  ],
 );
 
 export const publicProductLinks = pgTable("public_product_links", {
@@ -288,7 +296,7 @@ export const orders = pgTable(
     address: varchar("address", { length: 300 }).notNull(),
     city: varchar("city", { length: 60 }).notNull(),
     notes: varchar("notes", { length: 500 }),
-    totalMinor: integer("total_minor").notNull(),
+    totalMinor: bigint("total_minor", { mode: "number" }).notNull(),
     stockReserved: boolean("stock_reserved").notNull().default(false),
     cancelReason: varchar("cancel_reason", { length: 200 }),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),

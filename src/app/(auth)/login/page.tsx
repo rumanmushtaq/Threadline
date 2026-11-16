@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { safeNextPath } from "@/lib/safe-next";
 import { getCurrentUser } from "@/server/auth/current";
 import { LoginForm } from "./login-form";
 
@@ -8,7 +9,7 @@ export const metadata: Metadata = { title: "Sign in" };
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
   if (await getCurrentUser()) redirect("/dashboard");
   const { next } = await searchParams;
-  const safeNext = typeof next === "string" && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+  const safeNext = safeNextPath(next);
 
   return (
     <main className="grid min-h-svh lg:grid-cols-[1.1fr_1fr]">

@@ -1,7 +1,9 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CloudinaryStorage } from "./cloudinary";
+
+export type StoredObject = { key: string; createdAt: Date; remove(): Promise<void> };
 
 export interface StorageDriver {
   put(key: string, body: Buffer, contentType: string): Promise<void>;
@@ -9,6 +11,8 @@ export interface StorageDriver {
   delete(key: string): Promise<void>;
   /** Browser-reachable URL for a stored object. */
   url(key: string): string;
+  /** Every stored object under a prefix (used by the orphan-file sweep). */
+  list(prefix: string): AsyncIterable<StoredObject>;
 }
 
 const SAFE_KEY = /^[a-z0-9][a-z0-9/_.-]*$/i;
@@ -36,6 +40,21 @@ class LocalStorage implements StorageDriver {
   }
   url(key: string) {
     return `/api/files/${key}`;
+  }
+  async *list(prefix: string): AsyncIterable<StoredObject> {
+    const start = this.file(prefix.replace(/\/$/, ""));
+    const walk = async function* (dir: string): AsyncGenerator<string> {
+      for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) yield* walk(full);
+        else yield full;
+      }
+    };
+    for await (const full of walk(start)) {
+      const key = path.relative(this.root, full).split(path.sep).join("/");
+      const { mtime } = await stat(full);
+      yield { key, createdAt: mtime, remove: () => this.delete(key) };
+    }
   }
 }
 
@@ -78,6 +97,16 @@ class S3Storage implements StorageDriver {
   }
   url(key: string) {
     return `${this.publicUrl.replace(/\/$/, "")}/${key}`;
+  }
+  async *list(prefix: string): AsyncIterable<StoredObject> {
+    let token: string | undefined;
+    do {
+      const res = await this.client.send(new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: token }));
+      for (const o of res.Contents ?? []) {
+        if (o.Key) yield { key: o.Key, createdAt: o.LastModified ?? new Date(), remove: () => this.delete(o.Key!) };
+      }
+      token = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (token);
   }
 }
 

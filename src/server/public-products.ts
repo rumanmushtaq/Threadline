@@ -51,7 +51,7 @@ export async function getPublicProduct(db: Executor, slug: string): Promise<Publ
   const [sizes, images, settings] = await Promise.all([
     db.select({ size: productSizes.size, onHand: productSizes.onHand, reserved: productSizes.reserved }).from(productSizes).where(eq(productSizes.productId, row.productId)),
     db
-      .select({ kind: productImages.kind, key: productImages.storageKey, width: productImages.width, height: productImages.height, variant: productImages.variant, createdAt: productImages.createdAt })
+      .select({ kind: productImages.kind, key: sql<string | null>`CASE WHEN ${productImages.kind} = 'marketing' THEN ${productImages.storageKey} ELSE ${productImages.displayKey} END`, width: productImages.width, height: productImages.height, variant: productImages.variant, createdAt: productImages.createdAt })
       .from(productImages)
       .where(eq(productImages.productId, row.productId)),
     getSettings(db),
@@ -74,7 +74,11 @@ export async function getPublicProduct(db: Executor, slug: string): Promise<Publ
     tagline: settings.brandTagline,
     maxOrderQuantity: settings.maxOrderQuantity,
     sizes: sortSizes(sizes).map((s) => ({ size: s.size, available: Math.max(0, s.onHand - s.reserved) })),
-    images: sorted.slice(0, 8).map((i) => ({ kind: i.kind, url: fileUrl(i.key)!, width: i.width, height: i.height })),
+    // Photos without a metadata-free copy yet (saved before copies existed) stay hidden until the backfill runs.
+    images: sorted
+      .filter((i) => i.key)
+      .slice(0, 8)
+      .map((i) => ({ kind: i.kind, url: fileUrl(i.key)!, width: i.width, height: i.height })),
   };
 }
 

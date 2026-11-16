@@ -1,3 +1,6 @@
+/** Timeout per provider call (per image); also used to plan the worker's time budget. */
+export const PROVIDER_TIMEOUT_MS = 90_000;
+
 export type GeneratedImage = { data: Buffer; contentType: string };
 
 export type GenerateRequest = {

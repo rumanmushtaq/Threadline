@@ -69,7 +69,7 @@ describe("login and sessions", () => {
     expect(await validateSessionToken(db, token)).toBeNull();
     await expect(
       login(db, { email: "staff1@test.local", password: "staff-pass-123" }, meta),
-    ).rejects.toThrow(/deactivated/);
+    ).rejects.toThrow(/incorrect/);
   });
 
   it("admin cannot deactivate themselves", async () => {
@@ -86,5 +86,44 @@ describe("permissions", () => {
       expect(can("staff", p)).toBe(false);
     }
     expect(permissionsFor("admin").length).toBeGreaterThan(permissionsFor("staff").length);
+  });
+});
+
+describe("hardening", () => {
+  it("parallel password guesses cannot get past the lockout", async () => {
+    await seedUsers();
+    const tries = await Promise.allSettled(
+      Array.from({ length: 30 }, () => login(db, { email: "staff1@test.local", password: "guess" }, meta)),
+    );
+    const messages = tries.map((t) => (t.status === "rejected" ? (t.reason as Error).message : "ok"));
+    expect(messages.filter((m) => /incorrect/.test(m))).toHaveLength(5);
+    expect(messages.filter((m) => /Too many/.test(m))).toHaveLength(25);
+  });
+
+  it("locks an email after 20 failures from many connections, but not for the owner's known connection", async () => {
+    await seedUsers();
+    await login(db, { email: "staff1@test.local", password: "staff-pass-123" }, { ip: "10.8.8.8" }); // owner's usual connection
+    for (let i = 0; i < 20; i++) {
+      await expect(login(db, { email: "staff1@test.local", password: "guess" }, { ip: `10.9.0.${i}` })).rejects.toThrow(/incorrect/);
+    }
+    await expect(login(db, { email: "staff1@test.local", password: "staff-pass-123" }, { ip: "10.9.1.1" })).rejects.toThrow(/Too many/);
+    await expect(login(db, { email: "staff1@test.local", password: "staff-pass-123" }, { ip: "10.8.8.8" })).resolves.toBeTruthy();
+  });
+
+  it("two admins creating accounts at once both get a free slot", async () => {
+    const { adminId } = await seedUsers();
+    const made = await Promise.all([
+      createStaffUser(db, adminId, { name: "A", email: "a@test.local", password: "password-123" }),
+      createStaffUser(db, adminId, { name: "B", email: "b@test.local", password: "password-123" }),
+    ]);
+    expect(made.map((m) => m.slot).sort()).toEqual([3, 4]);
+  });
+
+  it("only allows same-site redirects after login", async () => {
+    const { safeNextPath } = await import("@/lib/safe-next");
+    expect(safeNextPath("/orders?status=pending")).toBe("/orders?status=pending");
+    for (const bad of ["//evil.com", "/\\evil.com", "/\\\\evil.com", "https://evil.com", "javascript:alert(1)", "/ok\\..\\x", "/\t/evil.com", "/\n/evil.com", undefined]) {
+      expect(safeNextPath(bad)).toBe("/dashboard");
+    }
   });
 });

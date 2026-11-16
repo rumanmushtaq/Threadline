@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { runAction, parseOrThrow } from "@/server/action";
 import { getCurrentUser, requestMeta } from "@/server/auth/current";
 import { login, loginSchema } from "@/server/auth/login";
-import { deleteSessionByToken, SESSION_COOKIE } from "@/server/auth/session";
+import { deleteSessionByToken, SESSION_COOKIE, sessionCookieOptions } from "@/server/auth/session";
 import { logActivity } from "@/server/activity";
 import { db } from "@/server/db";
 
@@ -14,13 +14,7 @@ export async function loginAction(input: { email: string; password: string }) {
     const data = parseOrThrow(loginSchema, input);
     const meta = await requestMeta();
     const { token, expiresAt } = await login(db, data, meta);
-    (await cookies()).set(SESSION_COOKIE, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      expires: expiresAt,
-    });
+    (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions(expiresAt));
     return null;
   });
   return result;

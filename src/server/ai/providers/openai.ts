@@ -1,4 +1,4 @@
-import { PermanentAIError, type GenerateRequest, type GeneratedImage, type ImageProvider } from "../provider";
+import { PermanentAIError, PROVIDER_TIMEOUT_MS, type GenerateRequest, type GeneratedImage, type ImageProvider } from "../provider";
 
 /** OpenAI image edits with the product photo as the reference image. */
 export class OpenAIProvider implements ImageProvider {
@@ -18,7 +18,7 @@ export class OpenAIProvider implements ImageProvider {
       method: "POST",
       headers: { authorization: `Bearer ${this.key}` },
       body: form,
-      signal: AbortSignal.timeout(180_000),
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS * req.count),
     });
     const body = (await res.json().catch(() => ({}))) as { data?: { b64_json?: string }[]; error?: { message?: string } };
     if (!res.ok) {

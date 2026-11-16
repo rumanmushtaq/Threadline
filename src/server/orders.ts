@@ -21,15 +21,22 @@ import { getSettings } from "./settings";
 
 export type OrderStatus = (typeof orders.$inferSelect)["status"];
 
-const ORDER_RATE = { max: 5, windowMs: 10 * 60 * 1000 };
+const ORDER_WINDOW_MS = 10 * 60 * 1000;
+const ORDER_LIMITS = { ip: 10, phone: 3 };
 
-async function checkRateLimit(db: Executor, key: string) {
-  const [{ n }] = await db
+/**
+ * Counts and records inside the order transaction while holding a per-key lock, so
+ * parallel requests cannot all slip past the limit, and failed orders (sold out, typo)
+ * roll back and do not count against the customer.
+ */
+async function enforceLimit(tx: Transaction, key: string, max: number) {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${key}))`);
+  const [{ n }] = await tx
     .select({ n: count() })
     .from(rateLimitEvents)
-    .where(and(eq(rateLimitEvents.key, key), gt(rateLimitEvents.createdAt, new Date(Date.now() - ORDER_RATE.windowMs))));
-  if (n >= ORDER_RATE.max) throw new AppError("Too many orders from this connection. Please try again in a few minutes.", "RATE_LIMITED");
-  await db.insert(rateLimitEvents).values({ key });
+    .where(and(eq(rateLimitEvents.key, key), gt(rateLimitEvents.createdAt, new Date(Date.now() - ORDER_WINDOW_MS))));
+  if (n >= max) throw new AppError("Too many orders in a short time. Please try again in a few minutes.", "RATE_LIMITED");
+  await tx.insert(rateLimitEvents).values({ key });
 }
 
 /** Reserves stock for every item of an order (guarded update, so it cannot oversell). */
@@ -92,9 +99,9 @@ export async function placeOrder(db: Database, raw: unknown, meta: { ip: string 
   const input = parsed.data;
   if (input.website) throw new AppError("Your order could not be placed.", "VALIDATION");
 
-  await checkRateLimit(db, `order:${meta.ip}`);
-
   return db.transaction(async (tx) => {
+    if (meta.ip !== "unknown") await enforceLimit(tx, `order:ip:${meta.ip}`, ORDER_LIMITS.ip);
+    await enforceLimit(tx, `order:phone:${input.phone}`, ORDER_LIMITS.phone);
     const settings = await getSettings(tx);
     const [p] = await tx
       .select({
@@ -131,14 +138,14 @@ export async function placeOrder(db: Database, raw: unknown, meta: { ip: string 
       });
     }
 
-    const [customer] = await tx
+    // An anonymous order must not rewrite a saved customer's details: the first record for a
+    // phone number is kept, and each order carries its own delivery snapshot.
+    await tx
       .insert(customers)
       .values({ phone: input.phone, name: input.customerName, whatsapp: input.whatsapp, address: input.address, city: input.city })
-      .onConflictDoUpdate({
-        target: customers.phone,
-        set: { name: input.customerName, whatsapp: input.whatsapp, address: input.address, city: input.city, updatedAt: new Date() },
-      })
-      .returning({ id: customers.id });
+      .onConflictDoNothing({ target: customers.phone });
+    const [customer] = await tx.select({ id: customers.id }).from(customers).where(eq(customers.phone, input.phone));
+    await tx.update(customers).set({ updatedAt: new Date() }).where(eq(customers.id, customer.id));
 
     const [order] = await tx
       .insert(orders)
@@ -356,7 +363,7 @@ export async function listCustomers(db: Executor, f: z.infer<typeof customerFilt
       address: customers.address,
       createdAt: customers.createdAt,
       orders: sql<number>`(SELECT count(*)::int FROM orders o WHERE o.customer_id = customers.id)`,
-      delivered: sql<number>`(SELECT coalesce(sum(o.total_minor), 0)::int FROM orders o WHERE o.customer_id = customers.id AND o.status = 'delivered')`,
+      delivered: sql<number>`(SELECT coalesce(sum(o.total_minor), 0) FROM orders o WHERE o.customer_id = customers.id AND o.status = 'delivered')`.mapWith(Number),
       lastOrderAt: sql<Date | null>`(SELECT max(o.created_at) FROM orders o WHERE o.customer_id = customers.id)`,
       total: sql<number>`count(*) OVER()::int`,
     })

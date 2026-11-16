@@ -1,4 +1,4 @@
-import { PermanentAIError, type GenerateRequest, type GeneratedImage, type ImageProvider } from "../provider";
+import { PermanentAIError, PROVIDER_TIMEOUT_MS, type GenerateRequest, type GeneratedImage, type ImageProvider } from "../provider";
 
 type Part = { text?: string; inlineData?: { mimeType: string; data: string } };
 type Response = {
@@ -37,7 +37,7 @@ export class GeminiProvider implements ImageProvider {
         ],
         generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "4:5" } },
       }),
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     });
     const body = (await res.json().catch(() => ({}))) as Response;
     if (!res.ok) {

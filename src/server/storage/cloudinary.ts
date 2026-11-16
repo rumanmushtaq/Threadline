@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { StorageDriver } from "./index";
+import type { StorageDriver, StoredObject } from "./index";
 
 /** Cloudinary signature: sorted "k=v" pairs joined by "&", plus the API secret, SHA-1 hex. */
 export function cloudinarySignature(params: Record<string, string | number>, apiSecret: string) {
@@ -26,7 +26,38 @@ export class CloudinaryStorage implements StorageDriver {
     private apiSecret: string,
   ) {}
 
-  private async call(action: "upload" | "destroy", params: Record<string, string | number>, file?: Blob) {
+  /**
+   * Lists every resource under a prefix with the Admin API, including raw and video files
+   * (a signed image upload ticket could be replayed against those endpoints).
+   */
+  async *list(prefix: string): AsyncIterable<StoredObject> {
+    const auth = `Basic ${Buffer.from(`${this.apiKey}:${this.apiSecret}`).toString("base64")}`;
+    for (const type of ["image", "raw", "video"] as const) {
+      let cursor: string | undefined;
+      do {
+        const qs = new URLSearchParams({ prefix, max_results: "500", ...(cursor ? { next_cursor: cursor } : {}) });
+        // Admin API: GET /resources/{resource_type}/{delivery_type}?prefix=...
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${this.cloud}/resources/${type}/upload?${qs}`, {
+          headers: { authorization: auth },
+          signal: AbortSignal.timeout(60_000),
+        });
+        if (!res.ok) throw new Error(`Cloudinary list failed: HTTP ${res.status}`);
+        const body = (await res.json()) as { resources?: { public_id: string; format?: string; created_at: string }[]; next_cursor?: string };
+        for (const r of body.resources ?? []) {
+          const key = type === "image" && r.format ? `${r.public_id}.${r.format}` : r.public_id;
+          yield {
+            // Raw and video files are never ours to keep: report them under a key nothing references.
+            key: type === "image" ? key : `${type}:${key}`,
+            createdAt: new Date(r.created_at),
+            remove: () => this.call("destroy", { public_id: r.public_id, invalidate: "true" }, undefined, type).then(() => {}),
+          };
+        }
+        cursor = body.next_cursor;
+      } while (cursor);
+    }
+  }
+
+  private async call(action: "upload" | "destroy", params: Record<string, string | number>, file?: Blob, resourceType: "image" | "raw" | "video" = "image") {
     const timestamp = Math.floor(Date.now() / 1000);
     const signed = { ...params, timestamp };
     const form = new FormData();
@@ -34,7 +65,7 @@ export class CloudinaryStorage implements StorageDriver {
     form.set("api_key", this.apiKey);
     form.set("signature", cloudinarySignature(signed, this.apiSecret));
     if (file) form.set("file", file);
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${this.cloud}/image/${action}`, {
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${this.cloud}/${resourceType}/${action}`, {
       method: "POST",
       body: form,
       signal: AbortSignal.timeout(60_000),

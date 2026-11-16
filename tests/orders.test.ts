@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { inventoryTransactions, orders, productSizes, settings, stockReservations } from "@/server/db/schema";
+import { customers, inventoryTransactions, orders, productSizes, settings, stockReservations } from "@/server/db/schema";
 import { expirePendingOrders, placeOrder, transitionOrder } from "@/server/orders";
 import { createProduct, setProductPublished } from "@/server/products";
 import { getPublicProduct } from "@/server/public-products";
@@ -72,10 +72,26 @@ describe("placing orders", () => {
     await expect(placeOrder(db, { slug: p.slug, size: "M", quantity: 1, ...customer }, { ip: ip() })).rejects.toThrow(/no longer available/);
   });
 
-  it("rate-limits order spam from one connection", async () => {
+  it("rate-limits order spam per connection and per phone, even in parallel", async () => {
     const p = await createProduct(db, ids.staffId, productInput(), await testImage());
-    for (let i = 0; i < 5; i++) await placeOrder(db, { slug: p.slug, size: "L", quantity: 1, ...customer }, { ip: "9.9.9.9" });
-    await expect(placeOrder(db, { slug: p.slug, size: "L", quantity: 1, ...customer }, { ip: "9.9.9.9" })).rejects.toThrow(/Too many orders/);
+    // One phone: 3 orders, then blocked — even from different connections.
+    for (let i = 0; i < 3; i++) await placeOrder(db, { slug: p.slug, size: "L", quantity: 1, ...customer }, { ip: ip() });
+    await expect(placeOrder(db, { slug: p.slug, size: "L", quantity: 1, ...customer }, { ip: ip() })).rejects.toThrow(/Too many orders/);
+    // One connection: 10 parallel orders with different phones get through, the rest are blocked.
+    const results = await Promise.allSettled(
+      Array.from({ length: 14 }, (_, i) => placeOrder(db, { slug: p.slug, size: "L", quantity: 1, ...customer, phone: `0311${1000000 + i}` }, { ip: "9.9.9.9" })),
+    );
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(10);
+  });
+
+  it("does not let an anonymous order rewrite a saved customer", async () => {
+    const p = await product();
+    await placeOrder(db, { slug: p.slug, size: "M", quantity: 1, ...customer }, { ip: ip() });
+    await placeOrder(db, { slug: p.slug, size: "M", quantity: 1, ...customer, customerName: "Someone Else", address: "Another address 99" }, { ip: ip() });
+    const [c] = await db.select().from(customers);
+    expect([c.name, c.address]).toEqual([customer.customerName, customer.address]);
+    const snapshots = (await db.select({ n: orders.customerName }).from(orders)).map((r) => r.n).sort();
+    expect(snapshots).toEqual(["Ayesha Khan", "Someone Else"]);
   });
 });
 
@@ -145,5 +161,16 @@ describe("public product data", () => {
     const p = await product();
     await setProductPublished(db, ids.adminId, p.id, false);
     expect(await getPublicProduct(db, p.slug)).toBeNull();
+  });
+});
+
+describe("large amounts", () => {
+  it("customer totals beyond 2^31 minor units do not overflow", async () => {
+    const { listCustomers } = await import("@/server/orders");
+    const p = await product();
+    await placeOrder(db, { slug: p.slug, size: "M", quantity: 1, ...customer }, { ip: ip() });
+    await db.update(orders).set({ status: "delivered", totalMinor: 5_000_000_000 });
+    const res = await listCustomers(db, {});
+    expect(res.rows[0].delivered).toBe(5_000_000_000);
   });
 });

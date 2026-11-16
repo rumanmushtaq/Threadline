@@ -3,9 +3,10 @@ import { and, eq, gt, lt } from "drizzle-orm";
 import type { Executor } from "../db";
 import { sessions, users } from "../db/schema";
 
-export const SESSION_COOKIE = "tl_session";
+import { SESSION_COOKIE, SESSION_TTL_MS, sessionCookieOptions } from "@/lib/session-cookie";
+
+export { SESSION_COOKIE, SESSION_TTL_MS, sessionCookieOptions };
 const DAY = 24 * 60 * 60 * 1000;
-export const SESSION_TTL_MS = 30 * DAY;
 const RENEW_WHEN_LEFT_MS = 15 * DAY;
 
 export function hashToken(token: string) {
@@ -55,11 +56,13 @@ export async function validateSessionToken(db: Executor, token: string) {
   if (!row || !row.isActive) return null;
 
   let expiresAt = row.expiresAt;
+  let renewed = false;
   if (expiresAt.getTime() - Date.now() < RENEW_WHEN_LEFT_MS) {
     expiresAt = new Date(Date.now() + SESSION_TTL_MS);
     await db.update(sessions).set({ expiresAt }).where(eq(sessions.id, row.sessionId));
+    renewed = true;
   }
-  return { user: row.user as SessionUser, sessionId: row.sessionId, expiresAt };
+  return { user: row.user as SessionUser, sessionId: row.sessionId, expiresAt, renewed };
 }
 
 export async function deleteSessionByToken(db: Executor, token: string) {

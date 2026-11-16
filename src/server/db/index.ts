@@ -3,7 +3,7 @@ import { drizzle as drizzleNeon } from "drizzle-orm/neon-serverless";
 import { drizzle as drizzlePg, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool as PgPool } from "pg";
 import * as schema from "./schema";
-import { sslOptions } from "./ssl";
+import { pgConnection } from "./ssl";
 
 export type Database = NodePgDatabase<typeof schema>;
 export type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -21,7 +21,7 @@ export function createDb(url: string): { db: Database; close: () => Promise<void
     const db = drizzleNeon(pool, { schema }) as unknown as Database;
     return { db, close: () => pool.end() };
   }
-  const pool = new PgPool({ connectionString: url, max: Number(process.env.DATABASE_POOL_MAX ?? 10), ...sslOptions() });
+  const pool = new PgPool({ ...pgConnection(url), max: Number(process.env.DATABASE_POOL_MAX ?? 10) });
   return { db: drizzlePg(pool, { schema }), close: () => pool.end() };
 }
 

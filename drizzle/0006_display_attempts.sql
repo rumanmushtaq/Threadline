@@ -1,0 +1,1 @@
+ALTER TABLE "product_images" ADD COLUMN "display_attempts" smallint DEFAULT 0 NOT NULL;

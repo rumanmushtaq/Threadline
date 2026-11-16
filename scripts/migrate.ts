@@ -2,11 +2,11 @@ import "dotenv/config";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
-import { sslOptions } from "../src/server/db/ssl";
+import { pgConnection } from "../src/server/db/ssl";
 
 // Migrations use a plain TCP connection; Neon accepts these too.
 export async function runMigrations(url: string) {
-  const pool = new Pool({ connectionString: url, max: 1, ...sslOptions() });
+  const pool = new Pool({ ...pgConnection(url), max: 1 });
   try {
     await migrate(drizzle(pool), { migrationsFolder: "./drizzle" });
   } finally {

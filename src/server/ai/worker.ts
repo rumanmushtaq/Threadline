@@ -11,11 +11,15 @@ import { getSettings } from "../settings";
 import { storage } from "../storage";
 import { composeMarketingCard } from "./compose";
 import { buildPrompt } from "./prompt";
-import { getImageProvider, PermanentAIError } from "./provider";
+import { getImageProvider, PermanentAIError, PROVIDER_TIMEOUT_MS } from "./provider";
 
 type Job = typeof aiGenerationJobs.$inferSelect;
 
 const LOCK_MINUTES = 10;
+
+export function aiVariations() {
+  return Math.min(4, Math.max(1, Number(process.env.AI_VARIATIONS ?? 2)));
+}
 const WORKER_ID = `${process.pid}-${randomUUID().slice(0, 8)}`;
 
 /** Exponential backoff between attempts: 30 s, 2 min, 8 min, ... */
@@ -39,7 +43,7 @@ export async function claimNextJob(db: Database): Promise<Job | null> {
      WHERE id = (
        SELECT id FROM ai_generation_jobs
         WHERE (status = 'pending' AND run_after <= now())
-           OR (status = 'processing' AND locked_until < now())
+           OR (status = 'processing' AND locked_until < now() AND attempts < max_attempts)
         ORDER BY run_after
         FOR UPDATE SKIP LOCKED
         LIMIT 1)
@@ -86,7 +90,7 @@ async function processJob(db: Database, job: Job) {
 
   // Keep generated files in the same (non-identifying) folder as the original.
   const folder = original.storageKey.split("/").slice(0, 2).join("/");
-  const count = Math.min(4, Math.max(1, Number(process.env.AI_VARIATIONS ?? 2)));
+  const count = aiVariations();
   const generated = await provider.generate({
     sourceImage: source,
     sourceContentType: original.contentType,
@@ -114,17 +118,21 @@ async function processJob(db: Database, job: Job) {
       rows.push({ productId: product.id, kind: "ai_model", jobId: job.id, variant: i, ...photo });
 
       const composed = await composeMarketingCard(img.data, card, i);
-      const marketing = await storeImage(`${folder}/marketing`, composed, { contentType: "image/jpeg" });
+      const marketing = await storeImage(`${folder}/marketing`, composed, { contentType: "image/jpeg", display: false });
       stored.push(marketing);
       rows.push({ productId: product.id, kind: "marketing", jobId: job.id, variant: i, ...marketing });
     }
 
     await db.transaction(async (tx) => {
-      await tx.insert(productImages).values(rows);
-      await tx
+      // Fencing: finish only if this worker still owns the job. If the lock expired and
+      // another worker re-claimed it (attempts moved on), this result is dropped.
+      const owned = await tx
         .update(aiGenerationJobs)
         .set({ status: "completed", provider: provider.name, finishedAt: new Date(), lockedUntil: null, lastError: null })
-        .where(eq(aiGenerationJobs.id, job.id));
+        .where(and(eq(aiGenerationJobs.id, job.id), eq(aiGenerationJobs.status, "processing"), eq(aiGenerationJobs.attempts, job.attempts)))
+        .returning({ id: aiGenerationJobs.id });
+      if (!owned.length) throw new LostJobError();
+      await tx.insert(productImages).values(rows);
       await notifyUser(tx, job.requestedBy ?? product.createdBy, {
         type: "ai.completed",
         title: "AI photos are ready",
@@ -145,20 +153,29 @@ async function processJob(db: Database, job: Job) {
   }
 }
 
+class LostJobError extends Error {
+  constructor() {
+    super("Job was taken over by another worker");
+  }
+}
+
 async function failJob(db: Database, job: Job, err: unknown) {
+  if (err instanceof LostJobError) return; // the new owner reports the outcome
   const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
   const permanent = err instanceof PermanentAIError;
   const final = permanent || job.attempts >= job.maxAttempts;
 
   await db.transaction(async (tx) => {
-    await tx
+    const owned = await tx
       .update(aiGenerationJobs)
       .set(
         final
           ? { status: "failed", lastError: message, finishedAt: new Date(), lockedUntil: null }
           : { status: "pending", lastError: message, lockedUntil: null, runAfter: new Date(Date.now() + retryDelayMs(job.attempts)) },
       )
-      .where(eq(aiGenerationJobs.id, job.id));
+      .where(and(eq(aiGenerationJobs.id, job.id), eq(aiGenerationJobs.status, "processing"), eq(aiGenerationJobs.attempts, job.attempts)))
+      .returning({ id: aiGenerationJobs.id });
+    if (!owned.length) return;
     if (final) {
       const [p] = await tx.select({ name: products.name, sku: products.sku, createdBy: products.createdBy }).from(products).where(eq(products.id, job.productId));
       if (p) {
@@ -180,13 +197,46 @@ async function failJob(db: Database, job: Job, err: unknown) {
   });
 }
 
-/** Processes jobs until none are runnable, the job limit, or the time budget is reached. */
-export async function runWorker(opts: { db?: Database; maxJobs?: number; budgetMs?: number } = {}) {
+/**
+ * Jobs whose worker died on the last allowed attempt (lock expired, no retries left)
+ * are marked failed so they are never picked up again or billed again.
+ */
+export async function failAbandonedJobs(db: Database) {
+  const rows = await db
+    .update(aiGenerationJobs)
+    .set({ status: "failed", lastError: "The worker stopped before finishing (time limit or crash).", finishedAt: new Date(), lockedUntil: null })
+    .where(and(eq(aiGenerationJobs.status, "processing"), sql`${aiGenerationJobs.lockedUntil} < now()`, sql`${aiGenerationJobs.attempts} >= ${aiGenerationJobs.maxAttempts}`))
+    .returning({ productId: aiGenerationJobs.productId, requestedBy: aiGenerationJobs.requestedBy });
+  for (const r of rows) {
+    const [p] = await db.select({ name: products.name, sku: products.sku, createdBy: products.createdBy }).from(products).where(eq(products.id, r.productId));
+    if (p) {
+      await notifyUser(db, r.requestedBy ?? p.createdBy, {
+        type: "ai.failed",
+        title: "AI photo generation failed",
+        body: `${p.name} (${p.sku}): the worker stopped before finishing. Use “Regenerate AI images” to try again.`,
+        href: `/products/${r.productId}`,
+      });
+    }
+    await logActivity(db, { userId: null, action: "ai.failed", entityType: "product", entityId: r.productId, metadata: { sku: p?.sku, error: "worker stopped" } });
+  }
+  return rows.length;
+}
+
+/** Worst case for one job: every provider call hitting its timeout, plus storage and composing. */
+export function worstCaseJobMs() {
+  return aiVariations() * PROVIDER_TIMEOUT_MS + 30_000;
+}
+
+/**
+ * Processes jobs until none are runnable or the job limit is reached. With `mustFinishBy`
+ * (e.g. a serverless time limit), a job is only started if it can finish in time even in
+ * the worst case, so the platform never kills a half-done, already-paid-for job.
+ */
+export async function runWorker(opts: { db?: Database; maxJobs?: number; mustFinishBy?: number } = {}) {
   const db = opts.db ?? defaultDb;
-  const deadline = Date.now() + (opts.budgetMs ?? 50_000);
   const maxJobs = opts.maxJobs ?? 10;
   let processed = 0;
-  while (processed < maxJobs && Date.now() < deadline) {
+  while (processed < maxJobs && (!opts.mustFinishBy || Date.now() + worstCaseJobMs() < opts.mustFinishBy)) {
     const job = await claimNextJob(db);
     if (!job) break;
     processed++;
@@ -203,7 +253,8 @@ export async function runWorker(opts: { db?: Database; maxJobs?: number; budgetM
 /** Fire-and-forget trigger used right after a request finishes. Never throws. */
 export async function kickWorker() {
   try {
-    await runWorker({ maxJobs: 3 });
+    // Runs inside the request that saved the product; keep it within a typical 300 s function limit.
+    await runWorker({ maxJobs: 1, mustFinishBy: Date.now() + 280_000 });
   } catch (err) {
     console.error("[ai-worker] kick failed", err);
   }

@@ -8,14 +8,14 @@ type Num = string | number | null;
 const n = (v: Num) => Number(v ?? 0);
 
 /** Every number on the dashboard comes from these queries — nothing is estimated client-side. */
-export async function dashboardData(db: Executor) {
+export async function dashboardData(db: Executor, opts: { includeOrders: boolean }) {
   const settings = await getSettings(db);
   const t = settings.lowStockThreshold;
 
   const [stock] = (
     await db.execute<Record<string, Num>>(sql`
       WITH per_product AS (
-        SELECT p.id, p.audience, p.purchase_price_minor AS cost, p.selling_price_minor AS price,
+        SELECT p.id, p.audience, p.purchase_price_minor::bigint AS cost, p.selling_price_minor::bigint AS price,
                coalesce(sum(ps.on_hand), 0) AS on_hand, coalesce(sum(ps.reserved), 0) AS reserved
           FROM products p LEFT JOIN product_sizes ps ON ps.product_id = p.id
          WHERE p.status = 'active'
@@ -35,11 +35,13 @@ export async function dashboardData(db: Executor) {
         FROM per_product`)
   ).rows;
 
-  const [orderStats] = (
+  const [orderStats] = !opts.includeOrders
+    ? [{ total: 0, pending: 0, realized_profit: 0, revenue: 0 } as Record<string, Num>]
+    : (
     await db.execute<Record<string, Num>>(sql`
       SELECT count(*) AS total,
              count(*) FILTER (WHERE status = 'pending') AS pending,
-             coalesce((SELECT sum((oi.unit_price_minor - oi.unit_cost_minor) * oi.quantity)
+             coalesce((SELECT sum((oi.unit_price_minor - oi.unit_cost_minor)::bigint * oi.quantity)
                          FROM order_items oi JOIN orders o2 ON o2.id = oi.order_id
                         WHERE o2.status = 'delivered'), 0) AS realized_profit,
              coalesce(sum(total_minor) FILTER (WHERE status = 'delivered'), 0) AS revenue
@@ -96,11 +98,13 @@ export async function dashboardData(db: Executor) {
     .orderBy(desc(productImages.createdAt))
     .limit(6);
 
-  const recentOrders = await db
-    .select({ id: orders.id, orderNumber: orders.orderNumber, customerName: orders.customerName, status: orders.status, totalMinor: orders.totalMinor, createdAt: orders.createdAt })
-    .from(orders)
-    .orderBy(desc(orders.createdAt))
-    .limit(5);
+  const recentOrders = !opts.includeOrders
+    ? []
+    : await db
+        .select({ id: orders.id, orderNumber: orders.orderNumber, customerName: orders.customerName, status: orders.status, totalMinor: orders.totalMinor, createdAt: orders.createdAt })
+        .from(orders)
+        .orderBy(desc(orders.createdAt))
+        .limit(5);
 
   const recentActivity = await db
     .select({ id: activityLogs.id, action: activityLogs.action, metadata: activityLogs.metadata, userName: users.name, createdAt: activityLogs.createdAt })

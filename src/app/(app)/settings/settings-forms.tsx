@@ -52,7 +52,7 @@ export function AccountSettings({ name, email }: { name: string; email: string }
   });
   return (
     <Section title="Your account" description={`${name} · ${email}`}>
-      <form onSubmit={submit} noValidate className="grid gap-4 sm:grid-cols-3">
+      <form onSubmit={submit} method="post" noValidate className="grid gap-4 sm:grid-cols-3">
         {(["current", "password", "confirm"] as const).map((k) => (
           <div key={k} className="space-y-2">
             <Label htmlFor={`pw-${k}`}>{k === "current" ? "Current password" : k === "password" ? "New password" : "Confirm new password"}</Label>

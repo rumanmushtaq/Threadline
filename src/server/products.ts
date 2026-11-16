@@ -16,8 +16,8 @@ import {
   publicProductLinks,
   users,
 } from "./db/schema";
-import { AppError } from "./errors";
-import { deleteStoredImage, inspectImage, storeImage } from "./images";
+import { AppError, pgCode, pgConstraint } from "./errors";
+import { deleteStoredImage, inspectImage, storeDerivatives, storeImage, type StoredImage } from "./images";
 import { applyStockChange } from "./inventory";
 import { getSettings } from "./settings";
 import { fileUrl } from "./storage";
@@ -33,13 +33,25 @@ export async function createProduct(
   db: Database,
   actorId: string,
   input: ProductInput,
-  image: Buffer,
+  image: Buffer | { storageKey: string; data: Buffer },
   meta: { ip?: string | null } = {},
 ): Promise<CreatedProduct> {
-  await inspectImage(image);
   const productId = randomUUID();
-  // Storage folders use their own random id so public image URLs never reveal database ids.
-  const stored = await storeImage(`products/${randomUUID()}/original`, image);
+  let stored: StoredImage;
+  if (Buffer.isBuffer(image)) {
+    await inspectImage(image);
+    // Storage folders use their own random id so public image URLs never reveal database ids.
+    stored = await storeImage(`products/${randomUUID()}/original`, image);
+  } else {
+    // Already uploaded straight to storage by the browser; add thumbnail and display copy.
+    // A ticket can only be used once: replaying it must never touch another product's photo.
+    if (await storageKeyInUse(db, image.storageKey)) {
+      throw new AppError("This photo upload was already used. Please upload the picture again.", "CONFLICT", { image: ["Upload again"] });
+    }
+    const info = await inspectImage(image.data);
+    const d = await storeDerivatives(image.storageKey, image.data, true);
+    stored = { storageKey: image.storageKey, ...d, ...info };
+  }
 
   try {
     return await db.transaction(async (tx) => {
@@ -105,10 +117,26 @@ export async function createProduct(
       return { id: productId, sku: product.sku, slug: link.slug, jobId: job?.id ?? null };
     });
   } catch (err) {
-    await deleteStoredImage(stored);
+    if (Buffer.isBuffer(image)) {
+      await deleteStoredImage(stored);
+    } else {
+      // Remove only our own copies. The uploaded original is left for the orphan-file sweep,
+      // which deletes it a day later if no product points at it: a concurrent request using
+      // the same upload may still be about to commit.
+      await deleteStoredImage({ storageKey: "", thumbKey: stored.thumbKey, displayKey: stored.displayKey });
+    }
+    if (pgCode(err) === "23505" && pgConstraint(err) === "product_images_storage_key_unique") {
+      throw new AppError("This photo upload was already used. Please upload the picture again.", "CONFLICT", { image: ["Upload again"] });
+    }
     throw err;
   }
 }
+
+async function storageKeyInUse(db: Executor, key: string) {
+  const [row] = await db.select({ id: productImages.id }).from(productImages).where(eq(productImages.storageKey, key)).limit(1);
+  return !!row;
+}
+
 
 export async function updateProduct(db: Database, actorId: string, input: z.infer<typeof productUpdateSchema>) {
   await db.transaction(async (tx) => {
@@ -285,7 +313,12 @@ export async function getProductDetail(db: Executor, id: string) {
   return {
     ...product,
     sizes: sortSizes(sizes),
-    images: images.map((i) => ({ ...i, url: fileUrl(i.storageKey)!, thumbUrl: fileUrl(i.thumbKey ?? i.storageKey)! })),
+    images: images.map((i) => ({
+      ...i,
+      url: fileUrl(i.displayKey ?? i.storageKey)!,
+      originalUrl: fileUrl(i.storageKey)!,
+      thumbUrl: fileUrl(i.thumbKey ?? i.storageKey)!,
+    })),
     jobs,
   };
 }

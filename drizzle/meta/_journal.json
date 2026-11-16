@@ -15,6 +15,41 @@
       "when": 1794852584843,
       "tag": "0001_ledger_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794861087382,
+      "tag": "0002_display_images_bigint_totals",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794861093451,
+      "tag": "0003_supabase_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794863143191,
+      "tag": "0004_image_key_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794863311068,
+      "tag": "0005_rls_default_privileges",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794864408654,
+      "tag": "0006_display_attempts",
+      "breakpoints": true
     }
   ]
 }

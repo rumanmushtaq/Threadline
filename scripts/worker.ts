@@ -16,7 +16,7 @@ async function loop() {
   console.log("Threadline worker started");
   while (!stopping) {
     try {
-      const r = await runMaintenance(db, { budgetMs: 55_000 });
+      const r = await runMaintenance(db);
       if (r.ai.processed) console.log(`Processed ${r.ai.processed} AI job(s)`);
     } catch (err) {
       console.error("Worker cycle failed", err);

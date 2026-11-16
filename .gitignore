@@ -46,3 +46,6 @@ next-env.d.ts
 /playwright-report
 !.env.example
 /storage-test
+/storage-e2e
+/.next-e2e
+/e2e/.tmp

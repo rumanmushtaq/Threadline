@@ -34,16 +34,20 @@ In development, images are stored in `./storage` (`STORAGE_DRIVER=local`).
 2. Project Settings → Database → Connection string:
    - **Transaction pooler** (port `6543`) → `DATABASE_URL`
    - **Direct** or **Session pooler** (port `5432`) → `MIGRATION_DATABASE_URL`
-   - Add `?sslmode=require` to both.
-3. Optional, for fully verified TLS: download the CA certificate (Database → SSL) and set `DATABASE_CA_CERT` to its path.
-4. Run `pnpm db:migrate` and `pnpm db:seed` once.
+3. Database → SSL Configuration → download the CA certificate and set `DATABASE_CA_CERT`. It can be the file path or the PEM text itself (useful on Vercel). TLS is then fully verified against Supabase's CA.
+   - Without it, Node rejects Supabase's certificate, because it chains to Supabase's own root CA.
+   - Don't put `sslmode` in the URLs when using the CA; the app removes it anyway, so it can't override the CA.
+4. Run `pnpm db:migrate` and `pnpm db:seed` once. Migrations also turn on Row Level Security for every table and revoke the `anon`/`authenticated` roles. Supabase's public Data API can therefore read nothing, while the app, which connects as the table owner, is unaffected.
 
 Supabase Auth is not used. The app has its own login so it can enforce the four-account rule.
 
 ### 2. Cloudinary (images)
 
 Set `STORAGE_DRIVER=cloudinary` and `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
-(Cloudinary console → API Keys). Uploads are signed on the server, and originals are stored without changes.
+(Cloudinary console → API Keys).
+- The browser uploads the photo straight to Cloudinary using a short-lived signature from the server. Large phone photos therefore never pass through the app server; Vercel caps request bodies at 4.5 MB.
+- The server then downloads and checks the bytes, and stores a thumbnail plus a display copy.
+- Originals are kept untouched for staff downloads. Customers only see re-encoded copies, without EXIF/GPS data.
 
 ### 3. AI images
 
@@ -55,14 +59,22 @@ Set `STORAGE_DRIVER=cloudinary` and `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY
 
 Jobs start right after a product is saved. A sweep handles retries, crashed jobs and pending-order expiry. Run the sweep one of two ways:
 
-- **Vercel:** `vercel.json` already calls `/api/cron/worker` every minute. Set `CRON_SECRET` (32+ characters).
+- **Vercel Pro:** `vercel.json` already calls `/api/cron/worker` every minute. Set `CRON_SECRET` (32+ characters). The Hobby plan only allows daily crons and 60-second functions. There, remove `crons` from `vercel.json`, and call the URL every minute from an external scheduler (e.g. cron-job.org) with `Authorization: Bearer <CRON_SECRET>`, or run `pnpm worker` on a small server.
 - **VPS / Docker:** run `pnpm worker` next to `pnpm start`.
 
 Both can run at the same time safely, because jobs are claimed with `FOR UPDATE SKIP LOCKED`.
 
+Each sweep also:
+- cancels expired pending orders;
+- fails AI jobs whose worker died on the last attempt;
+- adds metadata-free display copies to photos saved before copies existed;
+- every 6 hours, deletes stored files that no image points at and that are older than a day (abandoned uploads).
+
 ### 5. Other variables
 
-`APP_URL` is the public base URL used in share links.
+- `APP_URL` is the public base URL used in share links.
+- `TRUSTED_PROXY` names the proxy header that holds the client IP for rate limits. Leave it empty on Vercel. Elsewhere the default is `xff` (right-most `X-Forwarded-For`), which is only safe behind a proxy that appends that header. Without a proxy, clients can fake it, and the server logs a warning at startup. Use `nginx` behind nginx with `proxy_set_header X-Real-IP $remote_addr`, or `cloudflare` behind Cloudflare. Never trust a header your proxy doesn't overwrite.
+- Uploads go straight from the browser to storage only with Cloudinary. With the `s3` driver on Vercel, photos still pass through the app and are capped at 4.5 MB.
 
 ## Scripts
 
@@ -75,6 +87,7 @@ Both can run at the same time safely, because jobs are claimed with `FOR UPDATE 
 | `pnpm db:seed` | Create or reset the admin account |
 | `pnpm worker` | Long-running job worker |
 | `pnpm test` | Unit and integration tests against the real test database |
+| `pnpm test:e2e` | Playwright end-to-end tests (production build on port 3300, test database). Set `PW_CHROMIUM_PATH` to use an already-downloaded Chromium. |
 | `pnpm typecheck` / `pnpm lint` | Static checks |
 
 ## What the tests cover
@@ -90,3 +103,22 @@ Both can run at the same time safely, because jobs are claimed with `FOR UPDATE 
 - AI worker retries with backoff, permanent failures, crashed-job recovery, and no double claims.
 - Marketing card output size.
 - Cloudinary request signing.
+- Public pages serve photos without EXIF/GPS data, under names that don't reveal the original's address.
+- Upload tickets can't be replayed to touch another product's files.
+- The orphan-file sweep and the display-copy backfill work.
+- Every table has Row Level Security on.
+- Customer totals are stored as bigint, so large amounts don't overflow.
+- Login limits hold under parallel guessing, per connection and per email, while the owner's known connection still gets in.
+- Order limits hold per connection and per phone, and failed orders don't count.
+- Customer records can't be overwritten by anonymous orders.
+- Login redirects stay on the same site.
+- A crashed AI job is never re-run past its last attempt, and a worker that lost its job can't save its result.
+- Supabase TLS settings with a CA certificate.
+- End to end (Playwright):
+  - Staff create a product through the six-step form (wrong totals are refused) and cannot reach admin pages.
+  - Staff can add stock but not remove it.
+  - A customer orders from the public page, and the page contains no purchase price.
+  - The admin is notified, then confirms, dispatches and delivers the order; stock and profit update.
+  - Unpublishing a product makes its link return 404.
+  - All four account slots fill up.
+  - Anonymous API calls and path traversal are refused.

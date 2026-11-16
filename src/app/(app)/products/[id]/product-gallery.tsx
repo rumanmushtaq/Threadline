@@ -4,7 +4,7 @@ import { AlertCircle, Download, Loader2, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
-type Img = { id: string; kind: "original" | "ai_model" | "marketing"; url: string; thumbUrl: string; variant: number };
+type Img = { id: string; kind: "original" | "ai_model" | "marketing"; url: string; originalUrl: string; thumbUrl: string; variant: number };
 type Job = { status: "pending" | "processing" | "completed" | "failed"; attempts: number; maxAttempts: number; lastError: string | null } | null;
 
 const KIND_LABEL = { original: "Original", ai_model: "AI photo", marketing: "Marketing card" } as const;
@@ -31,10 +31,10 @@ export function ProductGallery({ images, job }: { images: Img[]; job: Job }) {
         )}
         {active && (
           <a
-            href={active.url}
+            href={active.originalUrl}
             download
             className="absolute top-3 right-3 grid size-8 place-items-center rounded-full bg-background/90 backdrop-blur hover:bg-background"
-            aria-label="Download image"
+            aria-label="Download full-size image"
           >
             <Download className="size-4" />
           </a>

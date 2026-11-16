@@ -28,6 +28,7 @@ const LABELS: Record<string, string> = {
   "order.cancelled": "cancelled an order",
   "ai.generated": "generated AI images",
   "settings.updated": "updated settings",
+  "storage.swept": "removed unused image files",
   "category.created": "added a category",
   "category.updated": "updated a category",
 };
