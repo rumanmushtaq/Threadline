@@ -1,0 +1,17 @@
+# Local Postgres for development and tests. Production uses Neon (see .env.example).
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: threadline-postgres
+    environment:
+      POSTGRES_USER: threadline
+      POSTGRES_PASSWORD: threadline
+      POSTGRES_DB: threadline
+    ports:
+      - "127.0.0.1:55433:5432"
+    volumes:
+      - threadline-pg:/var/lib/postgresql/data
+      - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    restart: unless-stopped
+volumes:
+  threadline-pg:

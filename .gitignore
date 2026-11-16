@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local
+/storage
+/test-results
+/playwright-report
+!.env.example
+/storage-test
