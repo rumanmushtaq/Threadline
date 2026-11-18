@@ -259,7 +259,7 @@ Three triggers drive `runWorker()`, all safe to run at the same time thanks to `
 | Trigger | Where | Purpose |
 |---|---|---|
 | `after()` kick | product create / regenerate actions | Start work right after the response. |
-| Cron sweep | `GET /api/cron/worker` with `CRON_SECRET` (Vercel Cron every minute, or system cron) | Retries, crashed jobs, pending-order expiry. |
+| Cron sweep | `GET /api/cron/worker` with `CRON_SECRET` (Vercel Cron daily on Hobby, every minute on Pro or an external scheduler) | Retries, crashed jobs, pending-order expiry. |
 | Long-running worker | `pnpm worker` | For VPS / Docker deployments. |
 
 Monitoring: the **AI Product Images** page lists jobs by status with attempts, errors, durations and a Retry/Regenerate button.

@@ -17,7 +17,7 @@ function authorized(req: Request) {
   return got.length === expected.length && timingSafeEqual(got, expected);
 }
 
-// Vercel Cron (vercel.json) or any scheduler calls this every minute with the secret.
+// Vercel Cron (vercel.json, daily) or any scheduler (every minute is best) calls this with the secret.
 export async function GET(req: Request) {
   const startedAt = Date.now();
   if (!authorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
