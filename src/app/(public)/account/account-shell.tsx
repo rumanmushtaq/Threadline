@@ -1,9 +1,12 @@
+import { connection } from "next/server";
 import { db } from "@/server/db";
 import { getSettings } from "@/server/settings";
 import { PublicHeader } from "../public-header";
 
 /** Centred card under the shop header, for the shopper sign-in pages. */
 export async function AccountShell({ title, description, children }: { title: string; description: React.ReactNode; children: React.ReactNode }) {
+  // Render on each request: the brand comes from the database, which the build cannot reach.
+  await connection();
   const s = await getSettings(db);
   return (
     <>
