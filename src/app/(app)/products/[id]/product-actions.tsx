@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArchiveRestore, Copy, ExternalLink, Eye, EyeOff, Pencil, Sparkles } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronDown, Copy, ExternalLink, Eye, EyeOff, Pencil, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
@@ -18,6 +18,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import type { ProviderName } from "@/server/ai/provider";
 import { regenerateImagesAction, setArchivedAction, setPublishedAction } from "../actions";
 
 export function ProductActions(props: {
@@ -27,6 +29,7 @@ export function ProductActions(props: {
   published: boolean;
   publicUrl: string;
   aiBusy: boolean;
+  providers: { name: ProviderName; label: string }[];
 }) {
   const can = useCan();
   const router = useRouter();
@@ -59,16 +62,33 @@ export function ProductActions(props: {
           </a>
         </Button>
       )}
-      {can("ai.regenerate") && (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={pending || props.aiBusy || props.archived}
-          onClick={() => run(() => regenerateImagesAction({ id: props.id }), "AI photo generation queued")}
-        >
-          <Sparkles /> {props.aiBusy ? "Generating…" : "Regenerate AI images"}
-        </Button>
-      )}
+      {can("ai.regenerate") &&
+        (props.providers.length > 1 ? (
+          // Several image services set up: pick one, e.g. the paid one when the free result misses details.
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" disabled={pending || props.aiBusy || props.archived}>
+                <Sparkles /> {props.aiBusy ? "Generating…" : "Regenerate AI images"} <ChevronDown />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {props.providers.map((p) => (
+                <DropdownMenuItem key={p.name} onSelect={() => run(() => regenerateImagesAction({ id: props.id, provider: p.name }), `Queued with ${p.label}`)}>
+                  {p.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pending || props.aiBusy || props.archived}
+            onClick={() => run(() => regenerateImagesAction({ id: props.id }), "AI photo generation queued")}
+          >
+            <Sparkles /> {props.aiBusy ? "Generating…" : "Regenerate AI images"}
+          </Button>
+        ))}
       {can("product.publish") && !props.archived && (
         <Button
           variant="outline"

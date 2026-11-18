@@ -50,6 +50,13 @@
       "when": 1794864408654,
       "tag": "0006_display_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794946266298,
+      "tag": "0007_job_requested_provider",
+      "breakpoints": true
     }
   ]
 }

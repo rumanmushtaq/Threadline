@@ -6,6 +6,7 @@ import { z } from "zod";
 import { productInputSchema, productUpdateSchema } from "@/lib/validation/product";
 import { parseOrThrow, runAction } from "@/server/action";
 import { enqueueGeneration } from "@/server/ai/jobs";
+import { PROVIDER_LABEL, PROVIDER_NAMES, providerConfigured } from "@/server/ai/provider";
 import { kickWorker } from "@/server/ai/worker";
 import { logActivity } from "@/server/activity";
 import { requestMeta, requirePermission } from "@/server/auth/current";
@@ -112,11 +113,14 @@ export async function stockMovementAction(input: unknown) {
 export async function regenerateImagesAction(input: unknown) {
   return runAction(async () => {
     const user = await requirePermission("ai.regenerate");
-    const { id } = parseOrThrow(z.object({ id: z.uuid() }), input);
+    const { id, provider } = parseOrThrow(z.object({ id: z.uuid(), provider: z.enum(PROVIDER_NAMES).optional() }), input);
+    if (provider && !providerConfigured(provider)) {
+      throw new AppError(`${PROVIDER_LABEL[provider]} is not set up on the server.`, "VALIDATION");
+    }
     const job = await db.transaction(async (tx) => {
-      const j = await enqueueGeneration(tx, id, user.id);
+      const j = await enqueueGeneration(tx, id, user.id, provider ?? null);
       if (!j) throw new AppError("Images for this product are already being generated.", "CONFLICT");
-      await logActivity(tx, { userId: user.id, action: "ai.regenerate_requested", entityType: "product", entityId: id });
+      await logActivity(tx, { userId: user.id, action: "ai.regenerate_requested", entityType: "product", entityId: id, metadata: provider ? { provider } : {} });
       return j;
     });
     after(() => kickWorker());

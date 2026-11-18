@@ -224,7 +224,7 @@ flowchart LR
   S2 --> D[Mark job completed,<br/>notify creator, log]
 ```
 
-- `ImageProvider` interface (`src/server/ai/provider.ts`): `generate({ sourceImage, prompt, count }) → images[]`. Providers: `gemini` (default, image editing with a reference image), `openai` (`/v1/images/edits`). Selected by `AI_IMAGE_PROVIDER`. Adding a provider is one file.
+- `ImageProvider` interface (`src/server/ai/provider.ts`): `generate({ sourceImage, prompt, count }) → images[]`. Providers: `cloudflare` (default, free FLUX.2 [klein] on Workers AI), `gemini` (paid, Nano Banana), `openai` (`/v1/images/edits`). Selected by `AI_IMAGE_PROVIDER`, with `AI_FALLBACK_PROVIDER` taking over when the free daily allowance runs out; staff can also pick a provider when regenerating. Adding a provider is one file.
 - The prompt asks for a realistic, fully clothed, age-appropriate model wearing the exact garment, keeping colors, fabric, logos and patterns, in a clean commercial setting. Kids → child model; Youth → teenager; Adult → adult.
 - **Text is never drawn by the AI.** Name, SKU, price, sizes, category and brand are rendered by a deterministic template (`src/server/ai/compose.tsx`) on top of the AI photo, using bundled fonts. Output: a portrait marketing card (1080×1350) per variation.
 - 2 variations per job by default (`AI_VARIATIONS`).

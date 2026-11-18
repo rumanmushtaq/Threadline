@@ -199,6 +199,8 @@ export const aiGenerationJobs = pgTable(
       .references(() => products.id, { onDelete: "restrict" }),
     status: jobStatusEnum("status").notNull().default("pending"),
     provider: varchar("provider", { length: 30 }),
+    // Provider chosen when regenerating (e.g. the paid one); null = AI_IMAGE_PROVIDER.
+    requestedProvider: varchar("requested_provider", { length: 30 }),
     attempts: integer("attempts").notNull().default(0),
     maxAttempts: integer("max_attempts").notNull().default(3),
     runAfter: timestamp("run_after", { withTimezone: true }).notNull().defaultNow(),

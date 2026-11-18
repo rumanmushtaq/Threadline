@@ -5,6 +5,7 @@ import { EmptyState, PageHeader } from "@/components/app/page-header";
 import { AiStatusBadge } from "@/components/products/badges";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDateTime, timeAgo } from "@/lib/format";
+import { defaultProviderName, PROVIDER_LABEL, PROVIDER_NAMES, providerConfigured, type ProviderName } from "@/server/ai/provider";
 import { listJobs, type JobStatus } from "@/server/ai/queries";
 import { requirePageUser } from "@/server/auth/current";
 import { can } from "@/server/auth/permissions";
@@ -27,8 +28,8 @@ export default async function AiImagesPage({ searchParams }: { searchParams: Pro
   const status = STATUSES.includes(raw as JobStatus) ? (raw as JobStatus) : undefined;
   const { counts, rows } = await listJobs(db, status);
   const active = (counts.pending ?? 0) + (counts.processing ?? 0);
-  const provider = process.env.AI_IMAGE_PROVIDER ?? "gemini";
-  const configured = provider === "openai" ? !!process.env.OPENAI_API_KEY : !!process.env.GEMINI_API_KEY;
+  const provider = defaultProviderName();
+  const configured = (PROVIDER_NAMES as readonly string[]).includes(provider) && providerConfigured(provider as ProviderName);
 
   return (
     <>
@@ -87,6 +88,7 @@ export default async function AiImagesPage({ searchParams }: { searchParams: Pro
                   </TableCell>
                   <TableCell>
                     <AiStatusBadge status={j.status} />
+                    {j.provider && <p className="mt-1 text-xs text-muted-foreground">via {PROVIDER_LABEL[j.provider as ProviderName] ?? j.provider}</p>}
                     {j.status === "pending" && j.attempts > 0 && (
                       <p className="mt-1 text-xs text-muted-foreground">retry {timeAgo(j.runAfter).replace(" ago", "")}</p>
                     )}

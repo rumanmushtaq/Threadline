@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDateTime, formatMoney, formatPercent } from "@/lib/format";
 import { AUDIENCE_LABEL } from "@/lib/sizes";
+import { availableProviders, PROVIDER_LABEL } from "@/server/ai/provider";
 import { requirePageUser } from "@/server/auth/current";
 import { db } from "@/server/db";
 import { stockHistory } from "@/server/inventory";
@@ -72,6 +73,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             published={product.isPublished}
             publicUrl={`${appUrl}/p/${product.link?.slug ?? product.sku}`}
             aiBusy={latestJob?.status === "pending" || latestJob?.status === "processing"}
+            providers={availableProviders().map((name) => ({ name, label: PROVIDER_LABEL[name] }))}
           />
         </div>
       </div>

@@ -7,11 +7,12 @@ type Response = {
   error?: { message?: string; status?: string };
 };
 
-/** Google Gemini image model ("Nano Banana"), which edits from a reference photo. */
+/** Google Gemini image models ("Nano Banana"), which edit from a reference photo. */
 export class GeminiProvider implements ImageProvider {
   readonly name = "gemini";
   private key = process.env.GEMINI_API_KEY;
-  private model = process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
+  // gemini-2.5-flash-image shuts down on 2027-03-15; Nano Banana 2 Lite is the cheapest current model.
+  private model = process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-lite-image";
 
   async generate(req: GenerateRequest): Promise<GeneratedImage[]> {
     if (!this.key) throw new PermanentAIError("AI provider not configured: set GEMINI_API_KEY");

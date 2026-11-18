@@ -11,7 +11,7 @@ import { getSettings } from "../settings";
 import { storage } from "../storage";
 import { composeMarketingCard } from "./compose";
 import { buildPrompt } from "./prompt";
-import { getImageProvider, PermanentAIError, PROVIDER_TIMEOUT_MS } from "./provider";
+import { generateImages, PermanentAIError, PROVIDER_TIMEOUT_MS, QuotaExceededError } from "./provider";
 
 type Job = typeof aiGenerationJobs.$inferSelect;
 
@@ -81,22 +81,24 @@ async function processJob(db: Database, job: Job) {
     .limit(1);
   if (!original) throw new PermanentAIError("Original product image is missing");
 
-  const [settings, sizes, provider, source] = await Promise.all([
+  const [settings, sizes, source] = await Promise.all([
     getSettings(db),
     db.select({ size: productSizes.size }).from(productSizes).where(eq(productSizes.productId, product.id)),
-    getImageProvider(),
     storage().get(original.storageKey),
   ]);
 
   // Keep generated files in the same (non-identifying) folder as the original.
   const folder = original.storageKey.split("/").slice(0, 2).join("/");
   const count = aiVariations();
-  const generated = await provider.generate({
-    sourceImage: source,
-    sourceContentType: original.contentType,
-    prompt: buildPrompt({ ...product, category: product.category }),
-    count,
-  });
+  const { images: generated, provider: providerName } = await generateImages(
+    {
+      sourceImage: source,
+      sourceContentType: original.contentType,
+      prompt: buildPrompt({ ...product, category: product.category }),
+      count,
+    },
+    job.requestedProvider,
+  );
 
   const card = {
     name: product.name,
@@ -128,7 +130,7 @@ async function processJob(db: Database, job: Job) {
       // another worker re-claimed it (attempts moved on), this result is dropped.
       const owned = await tx
         .update(aiGenerationJobs)
-        .set({ status: "completed", provider: provider.name, finishedAt: new Date(), lockedUntil: null, lastError: null })
+        .set({ status: "completed", provider: providerName, finishedAt: new Date(), lockedUntil: null, lastError: null })
         .where(and(eq(aiGenerationJobs.id, job.id), eq(aiGenerationJobs.status, "processing"), eq(aiGenerationJobs.attempts, job.attempts)))
         .returning({ id: aiGenerationJobs.id });
       if (!owned.length) throw new LostJobError();
@@ -144,7 +146,7 @@ async function processJob(db: Database, job: Job) {
         action: "ai.generated",
         entityType: "product",
         entityId: product.id,
-        metadata: { sku: product.sku, provider: provider.name, images: generated.length, attempts: job.attempts },
+        metadata: { sku: product.sku, provider: providerName, images: generated.length, attempts: job.attempts },
       });
     });
   } catch (err) {
@@ -159,8 +161,27 @@ class LostJobError extends Error {
   }
 }
 
+/** Cloudflare's free allowance resets at 00:00 UTC; try again a few minutes after. */
+export function nextQuotaReset(now = new Date()) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 5));
+}
+
 async function failJob(db: Database, job: Job, err: unknown) {
   if (err instanceof LostJobError) return; // the new owner reports the outcome
+  if (err instanceof QuotaExceededError) {
+    // Not the job's fault: wait for the next free allowance without using up an attempt.
+    await db
+      .update(aiGenerationJobs)
+      .set({
+        status: "pending",
+        attempts: sql`${aiGenerationJobs.attempts} - 1`,
+        lastError: "Waiting for the free daily image allowance to reset (00:00 UTC).",
+        lockedUntil: null,
+        runAfter: nextQuotaReset(),
+      })
+      .where(and(eq(aiGenerationJobs.id, job.id), eq(aiGenerationJobs.status, "processing"), eq(aiGenerationJobs.attempts, job.attempts)));
+    return;
+  }
   const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
   const permanent = err instanceof PermanentAIError;
   const final = permanent || job.attempts >= job.maxAttempts;

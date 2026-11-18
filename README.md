@@ -51,9 +51,16 @@ Set `STORAGE_DRIVER=cloudinary` and `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY
 
 ### 3. AI images
 
-`AI_IMAGE_PROVIDER=gemini` with `GEMINI_API_KEY` (default model `gemini-2.5-flash-image`), or
-`AI_IMAGE_PROVIDER=openai` with `OPENAI_API_KEY`. Without a key, products still save. Their AI jobs fail with
-"AI provider not configured" and can be retried from **AI Product Images**.
+| Provider | Cost | Notes |
+|---|---|---|
+| `cloudflare` (default) | **Free**: 10,000 Workers AI neurons a day, about 160 per 1024×1280 image with FLUX.2 [klein] 4B, so ~60 images (~30 products) a day | The reference photo is reduced below 512×512 for this model, so fine logos/prints may soften. `CLOUDFLARE_IMAGE_MODEL=@cf/black-forest-labs/flux-2-klein-9b` gives better detail but only ~6 free images a day. |
+| `gemini` | Paid, about $0.034 per image (`gemini-3.1-flash-lite-image`) | Best at keeping the exact garment. Note that `gemini-2.5-flash-image` shuts down on 2027-03-15. |
+| `openai` | Paid | `gpt-image-1` edits |
+
+- **Setup:** set `AI_IMAGE_PROVIDER` and that provider's keys. For Cloudflare, create a free account; the Account ID is on the dashboard, and an API token comes from the "Workers AI" template.
+- **Fallback:** with `AI_FALLBACK_PROVIDER=gemini`, products still get photos after the free allowance runs out. Without a fallback, jobs wait until the allowance resets at 00:00 UTC, without using up their retries.
+- **Choosing per product:** when more than one provider is set up, **Regenerate AI images** on a product lets staff pick one, e.g. the paid one when the free result misses a print.
+- **Not configured:** without any key, products still save, and their AI jobs fail with "AI provider not configured".
 
 ### 4. Background jobs
 
