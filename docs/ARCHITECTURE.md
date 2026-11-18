@@ -52,10 +52,10 @@ Layering rules:
 
 Key choices:
 
-- **Database:** PostgreSQL via Drizzle. Production default is **Supabase** (app on the transaction pooler, port 6543; migrations on the direct connection, port 5432; optional CA certificate for verified TLS). Neon also works (`@neondatabase/serverless` Pool is used automatically on `*.neon.tech` hosts). Local dev and tests use Postgres in Docker. Supabase Auth is not used: the app's own auth enforces the four-account rule.
+- **Database:** PostgreSQL via Drizzle. Production default is **Supabase** (app on the transaction pooler, port 6543; migrations on the direct connection, port 5432; optional CA certificate for verified TLS). Neon also works (`@neondatabase/serverless` Pool is used automatically on `*.neon.tech` hosts). Local dev and tests use Postgres in Docker.
 - **Storage:** `StorageDriver` interface. `cloudinary` driver in production (signed uploads, originals stored untouched, CDN delivery); `s3` driver as an alternative (Supabase Storage, R2, AWS S3, MinIO); `local` driver (`./storage`, served by `/api/files/...`) for development. Image binaries never go into Postgres.
 - **Background jobs:** a durable Postgres queue (the `ai_generation_jobs` table), claimed with `FOR UPDATE SKIP LOCKED`. No in-memory timers. Details in section 8.
-- **Auth:** own implementation. Argon2id passwords, opaque session tokens (SHA-256 hash stored), HttpOnly cookie. No public registration.
+- **Auth:** **Supabase Auth** (passwords, sessions, password-reset emails) through `@supabase/ssr`, server-side only, session in HttpOnly cookies. Each `users` row has the id of its Supabase user (`users.id` → `auth.users.id`); the four-account rule, roles and active flag stay in `users`. No public registration.
 
 ---
 
@@ -63,7 +63,7 @@ Key choices:
 
 ```mermaid
 erDiagram
-  users ||--o{ sessions : has
+  auth_users ||--|| users : "same id"
   users ||--o{ products : creates
   users ||--o{ inventory_transactions : records
   users ||--o{ activity_logs : performs
@@ -91,8 +91,7 @@ Full definitions: `src/server/db/schema.ts`. Money is stored as integer minor un
 
 | Table | Key columns and constraints |
 |---|---|
-| `users` | `slot smallint UNIQUE CHECK (slot BETWEEN 1 AND 4)`, `CHECK ((role='admin') = (slot=1))`, `email UNIQUE`, `password_hash`, `is_active`. **The slot column makes a fifth account impossible at the database level.** |
-| `sessions` | `token_hash UNIQUE`, `user_id FK`, `expires_at`, `ip`, `user_agent`. |
+| `users` | `slot smallint UNIQUE CHECK (slot BETWEEN 1 AND 4)`, `CHECK ((role='admin') = (slot=1))`, `email UNIQUE`, `is_active`, `id` = Supabase `auth.users.id` (FK). **The slot column makes a fifth account impossible at the database level.** |
 | `login_attempts` | `email`, `ip`, `success`, `created_at` — login throttling. |
 | `categories` | `name UNIQUE`, `slug UNIQUE`, `is_active`. Product type (T-Shirts, Hoodies...). |
 | `products` | `sku UNIQUE DEFAULT 'CLO-' \|\| lpad(nextval('product_sku_seq'),6,'0')`, `name`, `description` (≤1000), `audience` enum (kids/youth/adult), `category_id FK`, `purchase_price_minor`, `selling_price_minor`, `status` enum (active/archived), `is_published`, `created_by FK`. |
@@ -118,20 +117,24 @@ sequenceDiagram
   participant B as Browser
   participant P as proxy.ts
   participant S as Server Action / Page
+  participant A as Supabase Auth
   participant DB
   B->>S: POST login (email, password)
-  S->>DB: count recent failed attempts (email+IP)
-  S->>DB: load user, argon2id verify
-  S->>DB: insert session (sha256(token)), log "user.login"
-  S-->>B: Set-Cookie tl_session (HttpOnly, Secure, SameSite=Lax)
+  S->>DB: reserve attempt (lockout per email+IP)
+  S->>A: signInWithPassword
+  A-->>S: session (access + refresh token)
+  S->>DB: account active? log "user.login"
+  S-->>B: Set-Cookie sb-…-auth-token (HttpOnly, Secure, SameSite=Lax)
   B->>P: GET /dashboard
-  P-->>B: redirect /login if no cookie (optimistic only)
+  P->>A: getClaims (refreshes an expired access token, writes new cookies)
+  P-->>B: redirect /login if no session (optimistic only)
   P->>S: continue
-  S->>DB: requireUser(): session by token hash, not expired, user active
+  S->>A: getUser() — session still exists, user not banned
+  S->>DB: account by Supabase user id, is_active
   S->>S: requirePermission("product.create")
 ```
 
-- **Four accounts:** admin is created by `pnpm db:seed` (from `ADMIN_EMAIL` / `ADMIN_PASSWORD`). The admin creates users into free slots 2–4. The DB `slot` constraint is the hard limit; the app checks first to show a clear message. Accounts are deactivated, never deleted (they own history).
+- **Four accounts:** admin is created by `pnpm db:seed` (from `ADMIN_EMAIL` / `ADMIN_PASSWORD`). The admin creates users into free slots 2–4: first the Supabase user (admin API, email confirmed), then the `users` row; if the row fails (slot taken, race) the Supabase user is deleted again. The DB `slot` constraint is the hard limit; the app checks first to show a clear message. A Supabase user without a `users` row has no access, so turning public sign-ups on by mistake grants nothing. Accounts are deactivated, never deleted (they own history).
 - **Roles:** `admin`, `staff`. The permission matrix lives only on the server (`src/server/auth/permissions.ts`). The client receives the computed permission list for showing/hiding UI. Every action and route handler calls `requirePermission(...)` again.
 
 | Permission | Admin | Staff |
@@ -144,7 +147,8 @@ sequenceDiagram
 
 Staff can see purchase prices (they enter them). Nobody can delete products or inventory transactions — products are archived, transactions are immutable at the DB level.
 
-- **Sessions:** 30-day lifetime, sliding renewal when less than 15 days remain. Logout and deactivation delete sessions. 5 failed logins per email+IP in 15 minutes → temporary lock.
+- **Sessions:** Supabase access token (1 hour) + refresh token, refreshed in `proxy.ts`. Every page and action verifies with `getUser()`, so a deleted session is dead at once. Logout ends this browser's Supabase session. Deactivation bans the Supabase user and deletes its `auth.sessions`. An admin password reset or a password change signs out every other device. 5 failed logins per email+IP in 15 minutes → temporary lock (the app's own limit, in front of Supabase's).
+- **Forgot password:** `/forgot-password` → Supabase recovery email (only for active accounts; same answer either way; 5/hour per IP, 3/hour per email) → `/auth/confirm` (token_hash or PKCE code) → `/reset-password`.
 
 ---
 
@@ -298,7 +302,7 @@ Order submission (one transaction): validate input (Zod, honeypot, per-IP rate l
 
 | Phase | Scope | Exit check |
 |---|---|---|
-| 1 Foundation | Next.js, Drizzle schema + migrations + triggers, DB drivers, auth, sessions, four-account limit, RBAC, app shell, user management | Tests: 5th account rejected by DB; staff blocked from admin actions; login/logout/throttle. |
+| 1 Foundation | Next.js, Drizzle schema + migrations + triggers, DB drivers, Supabase Auth, four-account limit, RBAC, app shell, user management | Tests: 5th account rejected by DB; staff blocked from admin actions; login/logout/throttle. |
 | 2 Inventory | Dashboard, create-product wizard, upload, SKU, sizes, prices, product list/filters/detail/edit/archive, inventory module, ledger, activity logs | Tests: concurrent SKUs unique; size sum rules; negative stock rejected; ledger immutable. |
 | 3 AI automation | Queue, worker triggers, providers, composer, storage of results, job monitor, regenerate, notifications | Tests: claim/retry/backoff/fail; duplicate job blocked; composition output. |
 | 4 Public pages | `/p/[sku]`, link management, OG metadata, data separation | Test: public HTML has no purchase price; unpublished → 404. |

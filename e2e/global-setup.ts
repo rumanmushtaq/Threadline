@@ -1,11 +1,13 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import "dotenv/config";
+import { pointAtTestSupabase } from "../scripts/local-supabase";
 
 /** Fresh test database with one admin and one staff account, plus a product photo. */
 export default async function globalSetup() {
   const url = process.env.TEST_DATABASE_URL;
   if (!url || !/(^|[_-])test($|[_-])/i.test(new URL(url).pathname.replace(/^\//, ""))) throw new Error("TEST_DATABASE_URL must point at a *_test database");
-  process.env.ARGON2_CHEAP = "1";
+  // Accounts live in the local Supabase Auth test server, never a real project.
+  pointAtTestSupabase();
   const { resetDb, db, testDb } = await import("../tests/helpers");
   const { upsertAdmin, createStaffUser } = await import("../src/server/users");
   const sharp = (await import("sharp")).default;

@@ -8,6 +8,7 @@ const LABELS: Record<string, string> = {
   "user.deactivated": "deactivated an account",
   "user.password_reset": "reset a password",
   "user.password_changed": "changed their password",
+  "user.password_recovered": "set a new password from an email link",
   "product.created": "created a product",
   "product.updated": "updated a product",
   "product.archived": "archived a product",

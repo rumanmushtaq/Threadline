@@ -1,21 +1,32 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, SESSION_TTL_MS, sessionCookieOptions } from "@/lib/session-cookie";
+import { supabaseForCookies } from "@/server/supabase/clients";
 
 /**
- * Optimistic check only: real session validation happens on the server for every page
- * and action. Each visit also slides the cookie's expiry forward, so active people stay
- * signed in; the database session (renewed on use) decides whether the token is valid.
+ * Keeps the Supabase session fresh: an expired access token is refreshed here and the new
+ * cookies go both to the page being rendered and back to the browser (Server Components
+ * cannot set cookies). This is only an early redirect for visitors without a session;
+ * every page and action still verifies the session and the account on the server.
  */
-export function proxy(request: NextRequest) {
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
-  if (!token) {
+export async function proxy(request: NextRequest) {
+  let response = NextResponse.next({ request });
+  const supabase = supabaseForCookies({
+    getAll: () => request.cookies.getAll(),
+    setAll: (list) => {
+      for (const { name, value } of list) request.cookies.set(name, value);
+      response = NextResponse.next({ request });
+      for (const { name, value, options } of list) response.cookies.set(name, value, options);
+    },
+  });
+  const { data } = await supabase.auth.getClaims();
+  if (!data?.claims) {
     const url = new URL("/login", request.url);
     if (request.nextUrl.pathname !== "/") url.searchParams.set("next", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
+    const redirect = NextResponse.redirect(url);
+    // Carry over cookie changes (e.g. a dead session being cleared).
+    for (const cookie of response.cookies.getAll()) redirect.cookies.set(cookie);
+    return redirect;
   }
-  const res = NextResponse.next();
-  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(new Date(Date.now() + SESSION_TTL_MS)));
-  return res;
+  return response;
 }
 
 export const config = {

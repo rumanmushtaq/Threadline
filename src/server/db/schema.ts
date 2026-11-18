@@ -65,13 +65,13 @@ const updatedAt = () =>
 export const users = pgTable(
   "users",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    // Same id as the Supabase Auth user (auth.users.id); Supabase checks the password.
+    id: uuid("id").primaryKey(),
     // Slots 1-4 are the only possible accounts. Slot 1 is always the admin.
     slot: smallint("slot").notNull(),
     role: roleEnum("role").notNull(),
     name: varchar("name", { length: 80 }).notNull(),
     email: varchar("email", { length: 254 }).notNull(),
-    passwordHash: text("password_hash").notNull(),
     isActive: boolean("is_active").notNull().default(true),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     createdAt: createdAt(),
@@ -83,22 +83,6 @@ export const users = pgTable(
     check("users_slot_range", sql`${t.slot} BETWEEN 1 AND 4`),
     check("users_admin_slot", sql`(${t.role} = 'admin') = (${t.slot} = 1)`),
   ],
-);
-
-export const sessions = pgTable(
-  "sessions",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    ip: varchar("ip", { length: 64 }),
-    userAgent: varchar("user_agent", { length: 300 }),
-    createdAt: createdAt(),
-  },
-  (t) => [index("sessions_user_idx").on(t.userId)],
 );
 
 export const loginAttempts = pgTable(
@@ -454,12 +438,7 @@ export const settings = pgTable(
 // ---------------------------------------------------------------------------
 
 export const usersRelations = relations(users, ({ many }) => ({
-  sessions: many(sessions),
   products: many(products),
-}));
-
-export const sessionsRelations = relations(sessions, ({ one }) => ({
-  user: one(users, { fields: [sessions.userId], references: [users.id] }),
 }));
 
 export const productsRelations = relations(products, ({ one, many }) => ({

@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
+import type { CookieMethodsServer } from "@supabase/ssr";
 import { createDb } from "@/server/db";
+import { supabaseForCookies } from "@/server/supabase/clients";
 import { upsertAdmin, createStaffUser } from "@/server/users";
 
 export const testDb = createDb(process.env.TEST_DATABASE_URL!);
@@ -18,17 +20,19 @@ const TABLES = [
   "products",
   "notifications",
   "activity_logs",
-  "sessions",
   "login_attempts",
   "rate_limit_events",
   "users",
 ];
 
+const AUTH_TABLES = ["auth.users", "auth.audit_log_entries", "auth.flow_state"];
+
 /** Wipes data between tests. Replica mode skips the immutable-history triggers (test only). */
 export async function resetDb() {
   await db.transaction(async (tx) => {
     await tx.execute(sql`SET LOCAL session_replication_role = replica`);
-    await tx.execute(sql.raw(`TRUNCATE ${TABLES.join(", ")} RESTART IDENTITY CASCADE`));
+    // auth.* belongs to the local Supabase Auth test server, which uses this same database.
+    await tx.execute(sql.raw(`TRUNCATE ${[...TABLES, ...AUTH_TABLES].join(", ")} RESTART IDENTITY CASCADE`));
     await tx.execute(sql`ALTER SEQUENCE product_sku_seq RESTART WITH 1`);
     await tx.execute(sql`ALTER SEQUENCE order_number_seq RESTART WITH 1`);
     await tx.execute(sql`DELETE FROM settings`);
@@ -69,4 +73,26 @@ export function productInput(overrides: Partial<ProductInput> = {}): ProductInpu
     sellingPrice: 1500,
     ...overrides,
   };
+}
+
+/** A pretend browser: a cookie jar plus the Supabase client that keeps its session there. */
+export function browser() {
+  const jar = new Map<string, string>();
+  const cookies: CookieMethodsServer = {
+    getAll: () => [...jar].map(([name, value]) => ({ name, value })),
+    setAll: (list) => {
+      for (const { name, value, options } of list) {
+        if (!value || options?.maxAge === 0) jar.delete(name);
+        else jar.set(name, value);
+      }
+    },
+  };
+  return { jar, supabase: supabaseForCookies(cookies) };
+}
+
+/** A second browser that starts with a copy of another one's cookies (e.g. a stolen session). */
+export function copyOf(other: ReturnType<typeof browser>) {
+  const b = browser();
+  for (const [k, v] of other.jar) b.jar.set(k, v);
+  return b;
 }

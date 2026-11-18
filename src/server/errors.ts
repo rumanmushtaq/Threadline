@@ -11,6 +11,7 @@ export class AppError extends Error {
       | "VALIDATION"
       | "CONFLICT"
       | "RATE_LIMITED"
+      | "UNAVAILABLE"
       | "STOCK" = "VALIDATION",
     public readonly fieldErrors?: FieldErrors,
   ) {

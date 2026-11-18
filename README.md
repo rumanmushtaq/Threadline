@@ -11,18 +11,26 @@ Design and decisions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ## Stack
 
 Next.js 16 · TypeScript · Tailwind CSS 4 · shadcn/ui · React Hook Form + Zod · TanStack Query · Drizzle ORM ·
-**Supabase** (PostgreSQL) · **Cloudinary** (images) · Gemini or OpenAI (AI photos) · Postgres-backed job queue.
+**Supabase** (PostgreSQL + Auth) · **Cloudinary** (images) · Cloudflare / Gemini / OpenAI (AI photos) · Postgres-backed job queue.
 
 ## Local development
 
 ```bash
-docker compose up -d          # Postgres on 127.0.0.1:55433 (dev + test databases)
+docker compose up -d          # Postgres + Supabase Auth + mail catcher (see below)
 cp .env.example .env          # then set ADMIN_EMAIL / ADMIN_PASSWORD
+pnpm supabase:local-env >> .env   # local Supabase Auth URL and keys
 pnpm install
 pnpm db:migrate
-pnpm db:seed                  # creates the admin account
+pnpm db:seed                  # creates the admin account (in Supabase Auth and here)
 pnpm dev
 ```
+
+`docker compose` starts:
+- Postgres on `127.0.0.1:55433` (databases `threadline` and `threadline_test`);
+- Supabase Auth (the same server Supabase runs) for development at `http://127.0.0.1:54321` and for tests at `http://127.0.0.1:54331`;
+- Mailpit at http://127.0.0.1:54324, which catches password-reset emails.
+
+The local keys are signed with Supabase's public development secret, so they are worthless anywhere else.
 
 In development, images are stored in `./storage` (`STORAGE_DRIVER=local`).
 
@@ -39,7 +47,20 @@ In development, images are stored in `./storage` (`STORAGE_DRIVER=local`).
    - Don't put `sslmode` in the URLs when using the CA; the app removes it anyway, so it can't override the CA.
 4. Run `pnpm db:migrate` and `pnpm db:seed` once. Migrations also turn on Row Level Security for every table and revoke the `anon`/`authenticated` roles. Supabase's public Data API can therefore read nothing, while the app, which connects as the table owner, is unaffected.
 
-Supabase Auth is not used. The app has its own login so it can enforce the four-account rule.
+#### Supabase Auth (sign-in)
+
+Sign-in, sessions and password-reset emails use Supabase Auth. The four-account limit, roles and deactivation stay in the app's `users` table, whose ids are the Supabase user ids.
+
+1. Project Settings → API Keys: set `SUPABASE_URL` (`https://<project-ref>.supabase.co`), `SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY`. The legacy `anon` / `service_role` keys also work (`SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`). Only the server uses them; never add `NEXT_PUBLIC_`.
+2. Authentication → Sign In / Providers → Email: **turn off "Allow new users to sign up"**. Accounts are made only by the admin. (Even if it is left on, a self-made Supabase user has no account here and cannot get in.)
+3. Authentication → URL Configuration: Site URL = `APP_URL`; add `APP_URL/auth/confirm` to Redirect URLs.
+4. Authentication → Emails → "Reset password" template: replace the link with
+   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password`
+   so the link works in any browser. Supabase's default link also works, but only in the browser that asked for it.
+5. Authentication → Emails → SMTP: set up your own SMTP (e.g. Resend, Brevo). Supabase's built-in sender only delivers to your project team's addresses and a few emails per hour.
+6. `pnpm db:seed` creates the admin in Supabase Auth and in slot 1. Running it again resets the admin's password.
+
+Accounts made before Supabase Auth was added are upgraded with the same id: the admin's by `pnpm db:seed`, staff when the admin resets their password.
 
 ### 2. Cloudinary (images)
 
@@ -92,15 +113,19 @@ Each sweep also:
 | `pnpm db:migrate` | Apply migrations (`MIGRATION_DATABASE_URL` if set) |
 | `pnpm db:migrate:test` | Apply migrations to the test database |
 | `pnpm db:seed` | Create or reset the admin account |
+| `pnpm supabase:local-env` | Print the local Supabase Auth settings for `.env` |
 | `pnpm worker` | Long-running job worker |
-| `pnpm test` | Unit and integration tests against the real test database |
+| `pnpm test` | Unit and integration tests against the test database and the local Supabase Auth test server (`docker compose up -d` first) |
 | `pnpm test:e2e` | Playwright end-to-end tests (production build on port 3300, test database). Set `PW_CHROMIUM_PATH` to use an already-downloaded Chromium. |
 | `pnpm typecheck` / `pnpm lint` | Static checks |
 
 ## What the tests cover
 
-- Four-account limit, including direct database inserts.
-- Login lockout, session expiry on deactivation, and the permission matrix.
+- Four-account limit, including direct database inserts and two admins racing for the last slot (the loser's Supabase user is removed).
+- Every account row belongs to a Supabase Auth user; a Supabase user without an account here cannot get in.
+- Login, forged cookies, lockout and the permission matrix, against a real Supabase Auth server.
+- Sign-out, deactivation, admin password reset and password change end sessions on the server (copied cookies stop working).
+- Forgot password: email only to real accounts, the link signs in once, both link styles, per-connection and per-email limits.
 - Unique SKUs when products are saved at the same time.
 - Size totals must match the quantity, sizes must fit the group, and no image files are left behind on failure.
 - Stock can never go negative, and the ledger and activity log cannot be changed.
@@ -128,4 +153,6 @@ Each sweep also:
   - The admin is notified, then confirms, dispatches and delivers the order; stock and profit update.
   - Unpublishing a product makes its link return 404.
   - All four account slots fill up.
+  - Forgot password through the real email link, the link works once, then the password is changed back in Settings.
+  - Sign-out kills the session even for someone holding copied cookies.
   - Anonymous API calls and path traversal are refused.

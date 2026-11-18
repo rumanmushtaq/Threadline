@@ -1,7 +1,6 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import { failAbandonedJobs, runWorker } from "./ai/worker";
 import { backfillDisplayCopies, sweepOrphanFilesThrottled } from "./storage-maintenance";
-import { purgeExpiredSessions } from "./auth/session";
 import type { Database } from "./db";
 import { loginAttempts, rateLimitEvents } from "./db/schema";
 
@@ -21,7 +20,6 @@ export async function runMaintenance(db: Database, opts: { mustFinishBy?: number
   const backfilled = await backfillDisplayCopies(db).catch((err) => (console.error("Backfill failed", err), 0));
   const swept = await sweepOrphanFilesThrottled(db).catch((err) => (console.error("File sweep failed", err), 0));
   const ai = await runWorker({ db, mustFinishBy: opts.mustFinishBy });
-  await purgeExpiredSessions(db);
   const dayAgo = sql`now() - interval '1 day'`;
   // Failures only matter for 15 minutes; successes mark a trusted connection for 30 days.
   await db.delete(loginAttempts).where(and(eq(loginAttempts.success, false), lt(loginAttempts.createdAt, dayAgo)));

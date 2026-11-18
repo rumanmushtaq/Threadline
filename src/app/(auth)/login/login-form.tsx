@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -39,7 +40,12 @@ export function LoginForm({ next }: { next: string }) {
         {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="password">Password</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="password">Password</Label>
+          <Link href="/forgot-password" className="text-xs text-muted-foreground underline-offset-4 hover:underline">
+            Forgot password?
+          </Link>
+        </div>
         <Input id="password" type="password" autoComplete="current-password" aria-invalid={!!errors.password} {...form.register("password")} />
         {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
       </div>

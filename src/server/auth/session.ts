@@ -1,34 +1,7 @@
-import { createHash, randomBytes } from "node:crypto";
-import { and, eq, gt, lt } from "drizzle-orm";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { and, eq, sql } from "drizzle-orm";
 import type { Executor } from "../db";
-import { sessions, users } from "../db/schema";
-
-import { SESSION_COOKIE, SESSION_TTL_MS, sessionCookieOptions } from "@/lib/session-cookie";
-
-export { SESSION_COOKIE, SESSION_TTL_MS, sessionCookieOptions };
-const DAY = 24 * 60 * 60 * 1000;
-const RENEW_WHEN_LEFT_MS = 15 * DAY;
-
-export function hashToken(token: string) {
-  return createHash("sha256").update(token).digest("hex");
-}
-
-export async function createSession(
-  db: Executor,
-  userId: string,
-  meta: { ip?: string | null; userAgent?: string | null } = {},
-) {
-  const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-  await db.insert(sessions).values({
-    tokenHash: hashToken(token),
-    userId,
-    expiresAt,
-    ip: meta.ip?.slice(0, 64) ?? null,
-    userAgent: meta.userAgent?.slice(0, 300) ?? null,
-  });
-  return { token, expiresAt };
-}
+import { users } from "../db/schema";
 
 export type SessionUser = {
   id: string;
@@ -38,41 +11,44 @@ export type SessionUser = {
   slot: number;
 };
 
-/** Returns the user for a valid token, renewing the session when it is getting old. */
-export async function validateSessionToken(db: Executor, token: string) {
-  const tokenHash = hashToken(token);
-  const [row] = await db
-    .select({
-      sessionId: sessions.id,
-      expiresAt: sessions.expiresAt,
-      user: { id: users.id, name: users.name, email: users.email, role: users.role, slot: users.slot },
-      isActive: users.isActive,
-    })
-    .from(sessions)
-    .innerJoin(users, eq(users.id, sessions.userId))
-    .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date())))
+/**
+ * Asks Supabase Auth whether the session is valid (getUser checks with the Auth server,
+ * so signed-out, revoked and banned sessions fail), then loads the Threadline account.
+ * A Supabase user without an active account here has no access at all.
+ */
+export async function resolveSession(db: Executor, supabase: SupabaseClient) {
+  const {
+    data: { user: authUser },
+    error,
+  } = await supabase.auth.getUser();
+  if (error || !authUser) return null;
+  const [user] = await db
+    .select({ id: users.id, name: users.name, email: users.email, role: users.role, slot: users.slot })
+    .from(users)
+    .where(and(eq(users.id, authUser.id), eq(users.isActive, true)))
     .limit(1);
-
-  if (!row || !row.isActive) return null;
-
-  let expiresAt = row.expiresAt;
-  let renewed = false;
-  if (expiresAt.getTime() - Date.now() < RENEW_WHEN_LEFT_MS) {
-    expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-    await db.update(sessions).set({ expiresAt }).where(eq(sessions.id, row.sessionId));
-    renewed = true;
-  }
-  return { user: row.user as SessionUser, sessionId: row.sessionId, expiresAt, renewed };
+  return user ? { user: user as SessionUser } : null;
 }
 
-export async function deleteSessionByToken(db: Executor, token: string) {
-  await db.delete(sessions).where(eq(sessions.tokenHash, hashToken(token)));
+/** The Supabase session id of the signed-in browser (from its access token). */
+export async function currentSessionId(supabase: SupabaseClient) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const payload = session?.access_token.split(".")[1];
+  if (!payload) return undefined;
+  const claims = JSON.parse(Buffer.from(payload, "base64url").toString()) as { session_id?: string };
+  return claims.session_id;
 }
 
-export async function deleteUserSessions(db: Executor, userId: string) {
-  await db.delete(sessions).where(eq(sessions.userId, userId));
-}
-
-export async function purgeExpiredSessions(db: Executor) {
-  await db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
+/**
+ * Signs a user out everywhere (optionally keeping one session). Deleting the Supabase
+ * session also deletes its refresh tokens, and getUser() rejects its access tokens.
+ */
+export async function revokeSessions(db: Executor, userId: string, keepSessionId?: string) {
+  await db.execute(
+    keepSessionId
+      ? sql`DELETE FROM auth.sessions WHERE user_id = ${userId} AND id <> ${keepSessionId}`
+      : sql`DELETE FROM auth.sessions WHERE user_id = ${userId}`,
+  );
 }

@@ -2,17 +2,19 @@
 
 import { revalidatePath } from "next/cache";
 import { parseOrThrow, runAction } from "@/server/action";
-import { getCurrentSession, requirePermission } from "@/server/auth/current";
+import { getCurrentUser, requestMeta, requirePermission } from "@/server/auth/current";
 import { db } from "@/server/db";
 import { AppError, pgCode } from "@/server/errors";
+import { supabaseServer } from "@/server/supabase/next";
 import { categorySchema, saveCategory, settingsSchema, updateSettings } from "@/server/settings";
 import { changeOwnPassword, changeOwnPasswordSchema } from "@/server/users";
 
 export async function changePasswordAction(input: unknown) {
   return runAction(async () => {
-    const session = await getCurrentSession();
-    if (!session) throw new AppError("Your session has expired. Sign in again.", "UNAUTHENTICATED");
-    await changeOwnPassword(db, session.user.id, parseOrThrow(changeOwnPasswordSchema, input), session.sessionId);
+    const user = await getCurrentUser();
+    if (!user) throw new AppError("Your session has expired. Sign in again.", "UNAUTHENTICATED");
+    const data = parseOrThrow(changeOwnPasswordSchema, input);
+    await changeOwnPassword(db, await supabaseServer(), user, data, (await requestMeta()).ip);
     return null;
   });
 }

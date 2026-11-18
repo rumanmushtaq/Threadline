@@ -1,21 +1,15 @@
 import "server-only";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { db } from "../db";
 import { AppError } from "../errors";
+import { supabaseServer } from "../supabase/next";
 import { can, type Permission } from "./permissions";
-import { SESSION_COOKIE, validateSessionToken, type SessionUser } from "./session";
+import { resolveSession, type SessionUser } from "./session";
 
-/** Reads and validates the session once per request. */
-export const getCurrentSession = cache(async () => {
-  const jar = await cookies();
-  const token = jar.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
-  // The cookie's lifetime is refreshed in proxy.ts on every page visit; the database
-  // session (renewed in validateSessionToken) stays the source of truth.
-  return validateSessionToken(db, token);
-});
+/** Verifies the Supabase session once per request and loads the Threadline account. */
+export const getCurrentSession = cache(async () => resolveSession(db, await supabaseServer()));
 
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => (await getCurrentSession())?.user ?? null);
 
