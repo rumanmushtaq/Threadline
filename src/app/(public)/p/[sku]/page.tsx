@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { cache } from "react";
 import { formatMoney } from "@/lib/format";
 import { AUDIENCE_LABEL } from "@/lib/sizes";
+import { getCurrentCustomer } from "@/server/customer-session";
 import { db } from "@/server/db";
 import { getPublicProduct, recordView } from "@/server/public-products";
 import { ProductView } from "./product-view";
@@ -26,8 +27,10 @@ export async function generateMetadata({ params }: { params: Promise<{ sku: stri
 
 export default async function PublicProductPage({ params }: { params: Promise<{ sku: string }> }) {
   const { sku } = await params;
-  const product = await load(sku);
+  const [product, account] = await Promise.all([load(sku), getCurrentCustomer()]);
   if (!product) notFound();
   after(() => recordView(db, product.slug).catch(() => {}));
-  return <ProductView product={product} />;
+  // Only the shopper's own saved details go to the page, to fill in the order form.
+  const customer = account && { name: account.name, phone: account.phone, whatsapp: account.whatsapp, address: account.address, city: account.city };
+  return <ProductView product={product} customer={customer} />;
 }

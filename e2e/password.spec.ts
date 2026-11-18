@@ -1,21 +1,8 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { MAILPIT_URL } from "../scripts/local-supabase";
-import { login, STAFF } from "./fixtures";
+import { emailLink, login, STAFF } from "./fixtures";
 
 const NEW_PASSWORD = "reset-by-email-123";
-
-/** Waits for the newest email to `to` in the local mail catcher and returns its reset link. */
-async function resetLink(request: APIRequestContext, to: string) {
-  let link = "";
-  await expect(async () => {
-    const list = await (await request.get(`${MAILPIT_URL}/api/v1/messages`)).json();
-    const msg = list.messages.find((m: { To: { Address: string }[] }) => m.To[0].Address === to);
-    expect(msg).toBeTruthy();
-    const full = await (await request.get(`${MAILPIT_URL}/api/v1/message/${msg.ID}`)).json();
-    link = full.Text.match(/https?:\/\/\S+verify\S+/)[0];
-  }).toPass({ timeout: 15_000 });
-  return link;
-}
 
 test("forgot password: email link, new password, then changed back in settings", async ({ page, request, browser }) => {
   await request.delete(`${MAILPIT_URL}/api/v1/messages`);
@@ -26,7 +13,7 @@ test("forgot password: email link, new password, then changed back in settings",
   await page.getByRole("button", { name: "Send reset link" }).click();
   await expect(page.getByText(/reset link is on its way/)).toBeVisible();
 
-  const link = await resetLink(request, STAFF.email);
+  const link = await emailLink(request, STAFF.email);
   await page.goto(link);
   await expect(page).toHaveURL(/\/reset-password$/);
   await expect(page.getByText(`For ${STAFF.email}`)).toBeVisible();
@@ -69,7 +56,7 @@ test("forgot password: email link, new password, then changed back in settings",
 test("the reset page without a valid link sends you to ask for a new one", async ({ page }) => {
   await page.goto("/reset-password");
   await expect(page).toHaveURL(/\/forgot-password\?error=expired/);
-  await page.goto("/auth/confirm?code=not-a-real-code");
+  await page.goto("/auth/confirm?code=not-a-real-code&next=%2Freset-password");
   await expect(page).toHaveURL(/\/forgot-password\?error=expired/);
 });
 

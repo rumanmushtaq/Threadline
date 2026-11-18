@@ -1,4 +1,5 @@
 import { Shirt } from "lucide-react";
+import Link from "next/link";
 
 export default function NotFound() {
   return (
@@ -9,6 +10,9 @@ export default function NotFound() {
         </div>
         <h1 className="font-display text-3xl">This item isn&apos;t available</h1>
         <p className="text-sm text-muted-foreground">The link may be old, or the product is no longer on sale.</p>
+        <Link href="/shop" className="inline-block pt-2 text-sm font-medium underline underline-offset-4">
+          See all products
+        </Link>
       </div>
     </main>
   );

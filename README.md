@@ -3,7 +3,7 @@
 Clothing inventory, AI product photography and customer orders for one clothing business.
 
 - **Staff app:** dashboard, products (photo → quantity → description → Kids/Youth/Adult sizes → prices), size-wise inventory with an immutable stock ledger, AI image jobs, public links, orders, customers, activity logs, users, settings.
-- **Customer page:** `/p/CLO-000001` — product photos, sizes, price and an order form. No account needed.
+- **Shop:** `/shop` lists everything on sale (search, category, Kids/Youth/Adult, price sort) and each product has its own shareable link, e.g. `/p/CLO-000001`. Browsing needs no account; to order, shoppers sign up with Google or email + password and can then follow their orders at `/account`.
 - **Exactly four accounts:** one admin (slot 1) and three users, enforced by the database.
 
 Design and decisions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -49,16 +49,20 @@ In development, images are stored in `./storage` (`STORAGE_DRIVER=local`).
 
 #### Supabase Auth (sign-in)
 
-Sign-in, sessions and password-reset emails use Supabase Auth. The four-account limit, roles and deactivation stay in the app's `users` table, whose ids are the Supabase user ids.
+Supabase Auth handles two kinds of people, kept apart by the app:
+- **Your team** (the four accounts): email + password at `/login`. Their roles, the four-account limit and deactivation live in the `users` table.
+- **Shoppers**: sign up at `/account/signup` with Google or email + password, and sign in at `/account/login`. They get a `customer_accounts` row, can order and follow their orders, and can never open a team page. Browsing `/shop` and product links needs no account; ordering does.
 
 1. Project Settings → API Keys: set `SUPABASE_URL` (`https://<project-ref>.supabase.co`), `SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY`. The legacy `anon` / `service_role` keys also work (`SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`). Only the server uses them; never add `NEXT_PUBLIC_`.
-2. Authentication → Sign In / Providers → Email: **turn off "Allow new users to sign up"**. Accounts are made only by the admin. (Even if it is left on, a self-made Supabase user has no account here and cannot get in.)
-3. Authentication → URL Configuration: Site URL = `APP_URL`; add `APP_URL/auth/confirm` to Redirect URLs.
-4. Authentication → Emails → "Reset password" template: replace the link with
-   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password`
-   so the link works in any browser. Supabase's default link also works, but only in the browser that asked for it.
-5. Authentication → Emails → SMTP: set up your own SMTP (e.g. Resend, Brevo). Supabase's built-in sender only delivers to your project team's addresses and a few emails per hour.
-6. `pnpm db:seed` creates the admin in Supabase Auth and in slot 1. Running it again resets the admin's password.
+2. Authentication → Sign In / Providers → Email: keep **"Allow new users to sign up" on** (shoppers sign up) and **"Confirm email" on**. Team accounts are still created only by the admin; signing up never gives team access.
+3. Authentication → Sign In / Providers → **Google**: turn on and paste a Client ID and Secret from Google Cloud Console → APIs & Services → Credentials → OAuth client ID (type "Web application"). In that Google client, add the Authorized redirect URI shown in Supabase: `https://<project-ref>.supabase.co/auth/v1/callback`.
+4. Authentication → URL Configuration: Site URL = `APP_URL`; add `APP_URL/**` to Redirect URLs.
+5. Authentication → Emails → templates (recommended, so links work in any browser):
+   - "Confirm signup": `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/shop`
+   - "Reset password": `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery` (the app sends team members and shoppers to their own reset page).
+   Supabase's default links also work, but only in the browser that asked for them.
+6. Authentication → Emails → SMTP: set up your own SMTP (e.g. Resend, Brevo). Supabase's built-in sender only delivers to your project team's addresses and a few emails per hour, so shoppers would not get their confirmation emails.
+7. `pnpm db:seed` creates the admin in Supabase Auth and in slot 1. Running it again resets the admin's password.
 
 Accounts made before Supabase Auth was added are upgraded with the same id: the admin's by `pnpm db:seed`, staff when the admin resets their password.
 
@@ -126,6 +130,8 @@ Each sweep also:
 - Login, forged cookies, lockout and the permission matrix, against a real Supabase Auth server.
 - Sign-out, deactivation, admin password reset and password change end sessions on the server (copied cookies stop working).
 - Forgot password: email only to real accounts, the link signs in once, both link styles, per-connection and per-email limits.
+- Shop: only products on sale, no cost or staff data, search wildcards matched literally, filters, sold-out last, bad URL parameters ignored.
+- Shoppers: sign-up with email confirmation, unconfirmed and wrong-password sign-ins refused, lockout after guessing, confirmation codes work once, forged sessions rejected, shoppers and team kept apart both ways, a shopper's email can't be taken for a team account, signing up with a team email changes nothing, orders linked to the shopper and only visible to them, saved delivery details, new password signs out other devices, deleting a shopper keeps their orders, Google sign-in starts with the right return address.
 - Unique SKUs when products are saved at the same time.
 - Size totals must match the quantity, sizes must fit the group, and no image files are left behind on failure.
 - Stock can never go negative, and the ledger and activity log cannot be changed.
@@ -149,7 +155,8 @@ Each sweep also:
 - End to end (Playwright):
   - Staff create a product through the six-step form (wrong totals are refused) and cannot reach admin pages.
   - Staff can add stock but not remove it.
-  - A customer orders from the public page, and the page contains no purchase price.
+  - A visitor browses the shop, is asked to sign up when ordering, confirms by email, orders with checks on every field, and sees the order in My orders; the page contains no purchase price.
+  - Shopper sign-up, sign-out/in, wrong passwords, unknown emails, lockout, team vs shopper logins refused both ways, repeat sign-up reveals nothing, unconfirmed email, broken links, forgot password, saved details, Google redirect, reset links routed to the right page.
   - The admin is notified, then confirms, dispatches and delivers the order; stock and profit update.
   - Unpublishing a product makes its link return 404.
   - All four account slots fill up.

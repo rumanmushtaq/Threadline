@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { applyServerErrors } from "@/lib/form-errors";
-import { setNewPasswordAction } from "../actions";
+import type { ActionResult } from "@/server/errors";
 
 const schema = z
   .object({
@@ -24,19 +24,26 @@ const schema = z
   })
   .refine((v) => v.password === v.confirm, { path: ["confirm"], message: "Passwords do not match" });
 
-export function ResetPasswordForm() {
+/** Used by the team and by shoppers; each passes its own action and where to go after. */
+export function ResetPasswordForm({
+  action,
+  doneHref,
+}: {
+  action: (input: { password: string }) => Promise<ActionResult<null>>;
+  doneHref: string;
+}) {
   const router = useRouter();
   const form = useForm({ resolver: zodResolver(schema), defaultValues: { password: "", confirm: "" } });
   const { errors, isSubmitting } = form.formState;
 
   const onSubmit = form.handleSubmit(async ({ password }) => {
-    const res = await setNewPasswordAction({ password });
+    const res = await action({ password });
     if (!res.ok) {
       applyServerErrors(res, form.setError);
       return;
     }
     toast.success("Password updated.");
-    router.replace("/dashboard");
+    router.replace(doneHref);
     router.refresh();
   });
 

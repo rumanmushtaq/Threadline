@@ -75,18 +75,28 @@ function authError(error: AuthError): never {
 }
 
 /**
- * Creates the Supabase Auth user behind an account. A Supabase user with this email but
- * no Threadline account (left over from a failed attempt, or a sign-up made while public
- * sign-ups were on) has no access, so it is replaced.
+ * Creates the Supabase Auth user behind a team account. A team user this app made earlier
+ * that never got its account row (a failed attempt) has no access, so it is replaced.
+ * Any other Supabase user with the email (a shopper) is never touched.
  */
 async function createAuthUser(db: Database, input: { id?: string; name: string; email: string; password: string }) {
   const admin = supabaseAdmin();
-  const attrs = { id: input.id, email: input.email, password: input.password, email_confirm: true, user_metadata: { name: input.name } };
+  // app_metadata can only be set with the secret key: it marks users this app made for the team.
+  const attrs = {
+    id: input.id,
+    email: input.email,
+    password: input.password,
+    email_confirm: true,
+    user_metadata: { name: input.name },
+    app_metadata: { threadline: "team" },
+  };
   let { data, error } = await admin.createUser(attrs);
   if (error?.code === "email_exists") {
     const orphan = await db.execute<{ id: string }>(sql`
       SELECT a.id FROM auth.users a
-       WHERE lower(a.email) = lower(${input.email}) AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = a.id)`);
+       WHERE lower(a.email) = lower(${input.email})
+         AND a.raw_app_meta_data->>'threadline' = 'team'
+         AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = a.id)`);
     const id = orphan.rows[0]?.id;
     if (!id) throw EMAIL_TAKEN();
     const removed = await admin.deleteUser(id);

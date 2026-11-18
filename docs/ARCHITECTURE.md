@@ -148,6 +148,7 @@ sequenceDiagram
 Staff can see purchase prices (they enter them). Nobody can delete products or inventory transactions — products are archived, transactions are immutable at the DB level.
 
 - **Sessions:** Supabase access token (1 hour) + refresh token, refreshed in `proxy.ts`. Every page and action verifies with `getUser()`, so a deleted session is dead at once. Logout ends this browser's Supabase session. Deactivation bans the Supabase user and deletes its `auth.sessions`. An admin password reset or a password change signs out every other device. 5 failed logins per email+IP in 15 minutes → temporary lock (the app's own limit, in front of Supabase's).
+- **Shoppers:** separate Supabase users with a `customer_accounts` row (Google or email + password, email confirmation). Browsing `/shop` and `/p/{SKU}` is open; `placeOrderAction` requires a shopper session and links the order (`orders.customer_account_id`). A team account is never a shopper and vice versa; a Google session for a team email is signed out. `/auth/confirm` handles email links and Google, and sends reset links to the right page.
 - **Forgot password:** `/forgot-password` → Supabase recovery email (only for active accounts; same answer either way; 5/hour per IP, 3/hour per email) → `/auth/confirm` (token_hash or PKCE code) → `/reset-password`.
 
 ---

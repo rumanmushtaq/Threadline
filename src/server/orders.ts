@@ -4,6 +4,7 @@ import { orderInputSchema } from "@/lib/validation/order";
 import { logActivity } from "./activity";
 import type { Database, Executor, Transaction } from "./db";
 import {
+  customerAccounts,
   customers,
   orderItems,
   orders,
@@ -89,7 +90,7 @@ async function releaseOrConsume(tx: Transaction, orderId: string, mode: "release
 }
 
 /** Public order submission. One transaction: customer, order, item snapshot, reservation, notifications. */
-export async function placeOrder(db: Database, raw: unknown, meta: { ip: string }) {
+export async function placeOrder(db: Database, raw: unknown, meta: { ip: string; customerAccountId?: string }) {
   const parsed = orderInputSchema.safeParse(raw);
   if (!parsed.success) {
     const fieldErrors: Record<string, string[]> = {};
@@ -147,10 +148,19 @@ export async function placeOrder(db: Database, raw: unknown, meta: { ip: string 
     const [customer] = await tx.select({ id: customers.id }).from(customers).where(eq(customers.phone, input.phone));
     await tx.update(customers).set({ updatedAt: new Date() }).where(eq(customers.id, customer.id));
 
+    if (meta.customerAccountId) {
+      // Remember the shopper's delivery details for their next order.
+      await tx
+        .update(customerAccounts)
+        .set({ phone: input.phone, whatsapp: input.whatsapp, address: input.address, city: input.city })
+        .where(eq(customerAccounts.id, meta.customerAccountId));
+    }
+
     const [order] = await tx
       .insert(orders)
       .values({
         customerId: customer.id,
+        customerAccountId: meta.customerAccountId ?? null,
         customerName: input.customerName,
         phone: input.phone,
         whatsapp: input.whatsapp,

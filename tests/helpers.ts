@@ -12,6 +12,7 @@ const TABLES = [
   "order_items",
   "inventory_transactions",
   "orders",
+  "customer_accounts",
   "customers",
   "product_images",
   "ai_generation_jobs",
@@ -94,5 +95,21 @@ export function browser() {
 export function copyOf(other: ReturnType<typeof browser>) {
   const b = browser();
   for (const [k, v] of other.jar) b.jar.set(k, v);
+  return b;
+}
+
+/**
+ * A browser whose session cookie was edited to claim another user (signature left as is),
+ * the way an attacker would try. Supabase must reject it.
+ */
+export function forgedCopyOf(other: ReturnType<typeof browser>, claimUserId = "00000000-0000-4000-8000-000000000000") {
+  const b = copyOf(other);
+  const [name, value] = [...b.jar].find(([k]) => /-auth-token(\.0)?$/.test(k))!;
+  const session = JSON.parse(Buffer.from(value.replace(/^base64-/, ""), "base64url").toString());
+  const [head, body, sig] = session.access_token.split(".");
+  const claims = JSON.parse(Buffer.from(body, "base64url").toString());
+  session.access_token = [head, Buffer.from(JSON.stringify({ ...claims, sub: claimUserId })).toString("base64url"), sig].join(".");
+  session.user = { ...session.user, id: claimUserId };
+  b.jar.set(name, "base64-" + Buffer.from(JSON.stringify(session)).toString("base64url"));
   return b;
 }

@@ -9,7 +9,7 @@ import { rateLimitEvents, users } from "@/server/db/schema";
 import { pgConstraint } from "@/server/errors";
 import { supabaseAdmin } from "@/server/supabase/clients";
 import { changeOwnPassword, createStaffUser, resetUserPassword, setOwnPassword, setUserActive, updateUser } from "@/server/users";
-import { browser, copyOf, db, resetDb, seedUsers, testDb } from "./helpers";
+import { browser, copyOf, db, forgedCopyOf, resetDb, seedUsers, testDb } from "./helpers";
 
 const meta = { ip: "10.0.0.1", userAgent: "vitest" };
 const STAFF = { email: "staff1@test.local", password: "staff-pass-123" };
@@ -82,9 +82,10 @@ describe("four-account limit", () => {
     expect(await countAuthUsers()).toBe(4);
   });
 
-  it("replaces a leftover Supabase user that has no Threadline account", async () => {
+  it("replaces a leftover team user from a failed attempt", async () => {
     const { adminId } = await seedUsers();
-    await supabaseAdmin().createUser({ email: "left@test.local", password: "old-pass-123", email_confirm: true });
+    // Left behind by an earlier failed team-account creation (marked by this app).
+    await supabaseAdmin().createUser({ email: "left@test.local", password: "old-pass-123", email_confirm: true, app_metadata: { threadline: "team" } });
     await createStaffUser(db, adminId, { name: "Left", email: "left@test.local", password: "new-pass-123" });
     await expect(signedIn({ email: "left@test.local", password: "new-pass-123" })).resolves.toBeTruthy();
   });
@@ -101,11 +102,11 @@ describe("login and sessions (Supabase Auth)", () => {
   });
 
   it("a forged cookie is not a session", async () => {
-    await seedUsers();
+    const { adminId } = await seedUsers();
     const b = await signedIn();
-    const forged = copyOf(b);
-    for (const k of forged.jar.keys()) forged.jar.set(k, forged.jar.get(k)!.replace(/.$/, "x"));
-    expect(await whoIs(forged)).toBeNull();
+    // Rewrite the session to claim to be the admin: the signature no longer matches.
+    expect(await whoIs(forgedCopyOf(b, adminId))).toBeNull();
+    expect(await whoIs(forgedCopyOf(b, crypto.randomUUID()))).toBeNull();
   });
 
   it("rejects a wrong password and locks after five failures", async () => {

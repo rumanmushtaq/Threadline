@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/current";
+import { setNewPasswordAction } from "../actions";
 import { AuthCard } from "../auth-card";
 import { ResetPasswordForm } from "./reset-password-form";
 
@@ -12,7 +13,7 @@ export default async function ResetPasswordPage() {
   if (!user) redirect("/forgot-password?error=expired");
   return (
     <AuthCard title="Set a new password" description={`For ${user.email}. Your other devices will be signed out.`}>
-      <ResetPasswordForm />
+      <ResetPasswordForm action={setNewPasswordAction} doneHref="/dashboard" />
     </AuthCard>
   );
 }

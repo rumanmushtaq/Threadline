@@ -263,6 +263,24 @@ export const customers = pgTable("customers", {
   updatedAt: updatedAt(),
 });
 
+/**
+ * Shoppers who signed up on the shop (Google or email + password). Same id as their
+ * Supabase Auth user. Completely separate from the four team accounts in `users`:
+ * a customer account never opens a staff page, and a team account is not a customer.
+ */
+export const customerAccounts = pgTable("customer_accounts", {
+  id: uuid("id").primaryKey(),
+  name: varchar("name", { length: 80 }).notNull(),
+  email: varchar("email", { length: 254 }).notNull(),
+  // Saved delivery details, filled in on the next order.
+  phone: varchar("phone", { length: 20 }),
+  whatsapp: varchar("whatsapp", { length: 20 }),
+  address: varchar("address", { length: 300 }),
+  city: varchar("city", { length: 60 }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
 export const orders = pgTable(
   "orders",
   {
@@ -274,6 +292,8 @@ export const orders = pgTable(
     customerId: uuid("customer_id")
       .notNull()
       .references(() => customers.id),
+    // The signed-in shopper who placed it (null for orders from before sign-in was required).
+    customerAccountId: uuid("customer_account_id").references(() => customerAccounts.id, { onDelete: "set null" }),
     status: orderStatusEnum("status").notNull().default("pending"),
     // Delivery snapshot: the customer row may change later, the order must not.
     customerName: varchar("customer_name", { length: 80 }).notNull(),
@@ -295,6 +315,7 @@ export const orders = pgTable(
   (t) => [
     index("orders_status_created_idx").on(t.status, t.createdAt),
     index("orders_customer_idx").on(t.customerId),
+    index("orders_customer_account_idx").on(t.customerAccountId, t.createdAt),
   ],
 );
 

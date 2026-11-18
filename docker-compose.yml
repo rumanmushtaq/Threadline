@@ -15,8 +15,8 @@ x-auth: &auth
     GOTRUE_JWT_AUD: authenticated
     GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
     GOTRUE_JWT_ADMIN_ROLES: service_role
-    # Accounts are created by the admin only.
-    GOTRUE_DISABLE_SIGNUP: "true"
+    # Shoppers sign up themselves (team accounts are still made by the admin only).
+    GOTRUE_DISABLE_SIGNUP: "false"
     GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
     GOTRUE_MAILER_AUTOCONFIRM: "false"
     GOTRUE_SMTP_HOST: mailpit
@@ -24,6 +24,12 @@ x-auth: &auth
     GOTRUE_SMTP_ADMIN_EMAIL: no-reply@threadline.test
     GOTRUE_SMTP_SENDER_NAME: Threadline
     GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+    GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+    # "Continue with Google" with placeholder credentials: the flow can start (and is tested
+    # up to Google's page), but a real Google sign-in needs your own client in Supabase.
+    GOTRUE_EXTERNAL_GOOGLE_ENABLED: "true"
+    GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: local-placeholder.apps.googleusercontent.com
+    GOTRUE_EXTERNAL_GOOGLE_SECRET: local-placeholder
     GOTRUE_RATE_LIMIT_EMAIL_SENT: "1000"
     GOTRUE_RATE_LIMIT_TOKEN_REFRESH: "100000"
     GOTRUE_RATE_LIMIT_VERIFY: "100000"
@@ -52,6 +58,7 @@ services:
       <<: *auth-env
       DATABASE_URL: postgres://threadline:threadline@postgres:5432/threadline?search_path=auth
       API_EXTERNAL_URL: http://127.0.0.1:54321/auth/v1
+      GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: http://127.0.0.1:54321/auth/v1/callback
       GOTRUE_SITE_URL: http://localhost:3000
       GOTRUE_URI_ALLOW_LIST: http://localhost:3000/**,http://127.0.0.1:3000/**
 
@@ -63,6 +70,7 @@ services:
       <<: *auth-env
       DATABASE_URL: postgres://threadline:threadline@postgres:5432/threadline_test?search_path=auth
       API_EXTERNAL_URL: http://127.0.0.1:54331/auth/v1
+      GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: http://127.0.0.1:54331/auth/v1/callback
       GOTRUE_SITE_URL: http://localhost:3300
       GOTRUE_URI_ALLOW_LIST: http://localhost:3300/**,http://127.0.0.1:3300/**
 

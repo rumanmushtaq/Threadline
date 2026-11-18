@@ -1,5 +1,6 @@
-import { and, desc, eq, sql } from "drizzle-orm";
-import { sortSizes, type Audience, type Size } from "@/lib/sizes";
+import { and, asc, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
+import { z } from "zod";
+import { AUDIENCES, sortSizes, type Audience, type Size } from "@/lib/sizes";
 import type { Executor } from "./db";
 import { categories, productImages, products, productSizes, publicProductLinks } from "./db/schema";
 import { getSettings } from "./settings";
@@ -107,4 +108,99 @@ export async function listLinks(db: Executor) {
     .innerJoin(products, eq(products.id, publicProductLinks.productId))
     .orderBy(desc(publicProductLinks.createdAt))
     .limit(200);
+}
+
+// ---------------------------------------------------------------------------
+// Shop: every published product, for customers. Same rule as the product page:
+// only what a customer may see (no costs, margins, users or internal ids).
+// ---------------------------------------------------------------------------
+
+export const SHOP_PAGE_SIZE = 24;
+export const SHOP_SORTS = ["newest", "price-asc", "price-desc"] as const;
+
+/** Shop URL parameters. Anything unexpected falls back to the default instead of failing. */
+export const shopFiltersSchema = z.object({
+  q: z.string().trim().max(80).catch("").default(""),
+  category: z.string().trim().max(80).catch("").default(""),
+  audience: z.enum(AUDIENCES).optional().catch(undefined),
+  sort: z.enum(SHOP_SORTS).catch("newest").default("newest"),
+  page: z.coerce.number().int().min(1).max(1000).catch(1).default(1),
+});
+export type ShopFilters = z.infer<typeof shopFiltersSchema>;
+
+export type ShopItem = {
+  slug: string;
+  name: string;
+  category: string | null;
+  audience: Audience;
+  price: number;
+  available: number;
+  imageUrl: string | null;
+};
+
+const onSale = and(eq(publicProductLinks.isActive, true), eq(products.isPublished, true), eq(products.status, "active"));
+
+export async function listShop(db: Executor, f: ShopFilters) {
+  const where: SQL[] = [onSale!];
+  if (f.q) where.push(ilike(products.name, `%${f.q.replace(/[\\%_]/g, (c) => "\\" + c)}%`));
+  if (f.category) where.push(eq(categories.slug, f.category));
+  if (f.audience) where.push(eq(products.audience, f.audience));
+
+  const available = sql<number>`coalesce((SELECT sum(greatest(ps.on_hand - ps.reserved, 0)) FROM product_sizes ps WHERE ps.product_id = ${products.id}), 0)::int`;
+  // A customer-safe photo: the newest AI model photo, else the uploaded one (both re-encoded, no metadata).
+  const image = sql<string | null>`(SELECT pi.thumb_key FROM product_images pi
+     WHERE pi.product_id = ${products.id} AND pi.kind IN ('ai_model', 'original') AND pi.display_key IS NOT NULL
+     ORDER BY (pi.kind = 'ai_model') DESC, pi.created_at DESC, pi.variant LIMIT 1)`;
+  const order =
+    f.sort === "price-asc" ? asc(products.sellingPriceMinor) : f.sort === "price-desc" ? desc(products.sellingPriceMinor) : desc(products.createdAt);
+
+  const base = () =>
+    db
+      .select({
+        slug: publicProductLinks.slug,
+        name: products.name,
+        category: categories.name,
+        audience: products.audience,
+        price: products.sellingPriceMinor,
+        available,
+        image,
+      })
+      .from(publicProductLinks)
+      .innerJoin(products, eq(products.id, publicProductLinks.productId))
+      .leftJoin(categories, eq(categories.id, products.categoryId))
+      .where(and(...where));
+
+  const [rows, [{ total }], cats, settings] = await Promise.all([
+    base()
+      // Sold-out items go last, so the first screen shows what can be ordered.
+      .orderBy(sql`(${available} = 0)`, order, desc(products.id))
+      .limit(SHOP_PAGE_SIZE)
+      .offset((f.page - 1) * SHOP_PAGE_SIZE),
+    db
+      .select({ total: count() })
+      .from(publicProductLinks)
+      .innerJoin(products, eq(products.id, publicProductLinks.productId))
+      .leftJoin(categories, eq(categories.id, products.categoryId))
+      .where(and(...where)),
+    // Only categories that have something on sale.
+    db
+      .select({ name: categories.name, slug: categories.slug, n: count() })
+      .from(publicProductLinks)
+      .innerJoin(products, eq(products.id, publicProductLinks.productId))
+      .innerJoin(categories, eq(categories.id, products.categoryId))
+      .where(and(onSale, eq(categories.isActive, true)))
+      .groupBy(categories.name, categories.slug)
+      .orderBy(asc(categories.name)),
+    getSettings(db),
+  ]);
+
+  return {
+    items: rows.map(({ image, ...r }): ShopItem => ({ ...r, imageUrl: fileUrl(image) })),
+    total,
+    pages: Math.max(1, Math.ceil(total / SHOP_PAGE_SIZE)),
+    categories: cats.map((c) => ({ name: c.name, slug: c.slug, count: c.n })),
+    currency: settings.currencySymbol,
+    brand: settings.brandName,
+    tagline: settings.brandTagline,
+  };
 }

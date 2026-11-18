@@ -8,16 +8,23 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { forgotPasswordAction } from "../actions";
+import type { ActionResult } from "@/server/errors";
 
 const schema = z.object({ email: z.email("Enter a valid email") });
 
-export function ForgotPasswordForm() {
+/** Used by the team and by shoppers; each passes its own action and sign-in page. */
+export function ForgotPasswordForm({
+  action,
+  loginHref,
+}: {
+  action: (input: { email: string }) => Promise<ActionResult<null>>;
+  loginHref: string;
+}) {
   const form = useForm({ resolver: zodResolver(schema), defaultValues: { email: "" } });
   const { errors, isSubmitting, isSubmitSuccessful } = form.formState;
 
   const onSubmit = form.handleSubmit(async (values) => {
-    const res = await forgotPasswordAction(values);
+    const res = await action(values);
     if (!res.ok) form.setError("root", { message: res.error });
   });
 
@@ -26,7 +33,7 @@ export function ForgotPasswordForm() {
       <div role="status" className="space-y-4 rounded-lg border bg-muted/40 p-4 text-sm">
         <MailCheck className="size-5 text-brand" />
         <p>If that email belongs to an account, a reset link is on its way. It works once and expires in an hour.</p>
-        <Link href="/login" className="font-medium underline underline-offset-4">Back to sign in</Link>
+        <Link href={loginHref} className="font-medium underline underline-offset-4">Back to sign in</Link>
       </div>
     );
   }
@@ -47,7 +54,7 @@ export function ForgotPasswordForm() {
         {isSubmitting && <Loader2 className="animate-spin" />} Send reset link
       </Button>
       <p className="text-center text-sm">
-        <Link href="/login" className="text-muted-foreground underline underline-offset-4">Back to sign in</Link>
+        <Link href={loginHref} className="text-muted-foreground underline underline-offset-4">Back to sign in</Link>
       </p>
     </form>
   );

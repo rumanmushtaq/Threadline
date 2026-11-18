@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, CheckCircle2, Loader2, Minus, Plus, ShieldCheck, Truck } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -15,11 +16,15 @@ import { AUDIENCE_LABEL, SIZE_LABEL, type Size } from "@/lib/sizes";
 import { cn } from "@/lib/utils";
 import { orderInputSchema } from "@/lib/validation/order";
 import type { PublicProduct } from "@/server/public-products";
+import { PublicHeader } from "../../public-header";
 import { placeOrderAction } from "./actions";
+
+export type SavedCustomer = { name: string; phone: string | null; whatsapp: string | null; address: string | null; city: string | null };
 
 type Placed = { orderNumber: string; totalMinor: number; productName: string; size: string; quantity: number };
 
-export function ProductView({ product }: { product: PublicProduct }) {
+export function ProductView({ product, customer }: { product: PublicProduct; customer: SavedCustomer | null }) {
+  const router = useRouter();
   const [active, setActive] = useState(0);
   const firstAvailable = product.sizes.find((s) => s.available > 0)?.size ?? null;
   const [size, setSize] = useState<Size | null>(firstAvailable);
@@ -31,15 +36,12 @@ export function ProductView({ product }: { product: PublicProduct }) {
   const maxQty = Math.min(selected?.available ?? 0, product.maxOrderQuantity);
   const soldOut = !firstAvailable;
   const image = product.images[active];
+  // Visitors can browse freely; ordering needs a shopper account (sign in, then back here).
+  const startOrder = () => (customer ? setOpen(true) : router.push(`/account/login?next=${encodeURIComponent(`/p/${product.slug}`)}&reason=order`));
 
   return (
     <>
-      <header className="border-b">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <span className="font-display text-xl tracking-tight">{product.brand}</span>
-          {product.tagline && <span className="hidden text-xs text-muted-foreground sm:block">{product.tagline}</span>}
-        </div>
-      </header>
+      <PublicHeader brand={product.brand} tagline={product.tagline} customer={customer} />
 
       <main className="mx-auto grid max-w-6xl gap-8 px-4 py-6 pb-28 sm:px-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:gap-12 md:py-10 md:pb-10">
         <section className="space-y-3">
@@ -134,7 +136,7 @@ export function ProductView({ product }: { product: PublicProduct }) {
           )}
 
           <div className="hidden md:block">
-            <OrderButton soldOut={soldOut} total={formatMoney(product.price * qty, product.currency)} onClick={() => setOpen(true)} />
+            <OrderButton soldOut={soldOut} total={formatMoney(product.price * qty, product.currency)} onClick={startOrder} />
           </div>
 
           <ul className="grid gap-3 border-t pt-6 text-sm text-muted-foreground sm:grid-cols-2">
@@ -149,7 +151,7 @@ export function ProductView({ product }: { product: PublicProduct }) {
       </main>
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 backdrop-blur md:hidden">
-        <OrderButton soldOut={soldOut} total={formatMoney(product.price * qty, product.currency)} onClick={() => setOpen(true)} />
+        <OrderButton soldOut={soldOut} total={formatMoney(product.price * qty, product.currency)} onClick={startOrder} />
       </div>
 
       <Sheet
@@ -164,6 +166,7 @@ export function ProductView({ product }: { product: PublicProduct }) {
             <Confirmation placed={placed} currency={product.currency} onClose={() => setOpen(false)} />
           ) : (
             <OrderForm
+              customer={customer}
               product={product}
               size={size}
               quantity={qty}
@@ -188,11 +191,13 @@ const formSchema = orderInputSchema.pick({ customerName: true, phone: true, what
 type FormValues = z.input<typeof formSchema>;
 
 function OrderForm({
+  customer,
   product,
   size,
   quantity,
   onPlaced,
 }: {
+  customer: SavedCustomer | null;
   product: PublicProduct;
   size: Size | null;
   quantity: number;
@@ -201,7 +206,16 @@ function OrderForm({
   const [error, setError] = useState<string | null>(null);
   const form = useForm<FormValues, unknown, z.output<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { customerName: "", phone: "", whatsapp: "", address: "", city: "", notes: "", website: "" },
+    // Filled in from the shopper's account; whatever they send is saved for next time.
+    defaultValues: {
+      customerName: customer?.name ?? "",
+      phone: customer?.phone ?? "",
+      whatsapp: customer?.whatsapp ?? "",
+      address: customer?.address ?? "",
+      city: customer?.city ?? "",
+      notes: "",
+      website: "",
+    },
   });
   const { errors, isSubmitting } = form.formState;
   const notes = useWatch({ control: form.control, name: "notes" }) ?? "";
@@ -284,9 +298,14 @@ function Confirmation({ placed, currency, onClose }: { placed: Placed; currency:
         <Row k="Quantity" v={placed.quantity} />
         <Row k="Total" v={<span className="font-semibold">{formatMoney(placed.totalMinor, currency)}</span>} />
       </div>
-      <Button variant="outline" onClick={onClose} className="rounded-xl">
-        <Check /> Done
-      </Button>
+      <div className="flex gap-2">
+        <Button asChild variant="outline" className="rounded-xl">
+          <a href="/account">Track in my orders</a>
+        </Button>
+        <Button variant="outline" onClick={onClose} className="rounded-xl">
+          <Check /> Done
+        </Button>
+      </div>
     </div>
   );
 }

@@ -29,7 +29,7 @@ const CREDENTIAL_ERRORS = new Set(["invalid_credentials", "user_banned", "email_
  * checked (it is flipped to success afterwards). The call to Supabase happens outside
  * any transaction, so no database connection waits on it.
  */
-async function reserveAttempt(db: Database, email: string, ip: string) {
+export async function reserveAttempt(db: Database, email: string, ip: string) {
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${"login:" + email}))`);
     const since = new Date(Date.now() - WINDOW_MS);
@@ -51,7 +51,7 @@ async function reserveAttempt(db: Database, email: string, ip: string) {
 }
 
 /** Turns a Supabase sign-in error into the message the person sees. */
-async function signInFailed(db: Database, attemptId: number, error: AuthError | null): Promise<never> {
+export async function signInFailed(db: Database, attemptId: number, error: AuthError | null): Promise<never> {
   if (!error || CREDENTIAL_ERRORS.has(error.code ?? "") || error.status === 400) {
     throw new AppError(INVALID, "UNAUTHENTICATED");
   }

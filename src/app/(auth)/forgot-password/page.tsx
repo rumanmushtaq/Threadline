@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { forgotPasswordAction } from "../actions";
 import { AuthCard } from "../auth-card";
 import { ForgotPasswordForm } from "./forgot-password-form";
 
@@ -13,7 +14,7 @@ export default async function ForgotPasswordPage({ searchParams }: { searchParam
           That reset link has expired or was already used. Ask for a new one.
         </p>
       )}
-      <ForgotPasswordForm />
+      <ForgotPasswordForm action={forgotPasswordAction} loginHref="/login" />
     </AuthCard>
   );
 }
