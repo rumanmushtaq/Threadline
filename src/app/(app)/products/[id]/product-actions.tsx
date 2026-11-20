@@ -63,6 +63,7 @@ export function ProductActions(props: {
         </Button>
       )}
       {can("ai.regenerate") &&
+        props.providers.length > 0 &&
         (props.providers.length > 1 ? (
           // Several image services set up: pick one, e.g. the paid one when the free result misses details.
           <DropdownMenu>

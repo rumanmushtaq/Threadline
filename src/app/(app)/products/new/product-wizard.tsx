@@ -21,12 +21,12 @@ import { cn } from "@/lib/utils";
 import { DESCRIPTION_MAX, priceSummary, productInputSchema, type ProductInput } from "@/lib/validation/product";
 import { createProductAction, prepareUploadAction } from "../actions";
 
-type Created = { id: string; sku: string; publicUrl: string };
+type Created = { id: string; sku: string; publicUrl: string; jobId: string | null };
 
 const money = (n: number, symbol: string) =>
   `${symbol} ${(Number.isFinite(n) ? n : 0).toLocaleString("en-PK", { maximumFractionDigits: 2 })}`;
 
-export function ProductWizard({ categories, currency }: { categories: { id: string; name: string }[]; currency: string }) {
+export function ProductWizard({ categories, currency, aiEnabled }: { categories: { id: string; name: string }[]; currency: string; aiEnabled: boolean }) {
   const router = useRouter();
   const [image, setImage] = useState<File | null>(null);
   const [imageError, setImageError] = useState<string>();
@@ -112,7 +112,7 @@ export function ProductWizard({ categories, currency }: { categories: { id: stri
         if (res.fieldErrors?.image) setImageError(res.fieldErrors.image[0]);
         return applyServerErrors(res, form.setError);
       }
-      toast.success(`Product ${res.data.sku} saved`, { description: "AI photos are being generated in the background." });
+      toast.success(`Product ${res.data.sku} saved`, { description: res.data.jobId ? "AI photos are being generated in the background." : "Your photo is used on the public page." });
       setCreated(res.data);
     },
     () => {
@@ -306,7 +306,9 @@ export function ProductWizard({ categories, currency }: { categories: { id: stri
         </div>
         <div className="mt-4 flex items-start gap-3 rounded-xl border border-dashed p-4 text-xs text-muted-foreground">
           <Sparkles className="mt-0.5 size-4 shrink-0 text-brand" />
-          After saving, the SKU and public link are created instantly. AI model photos are generated in the background — you can keep working.
+          {aiEnabled
+            ? "After saving, the SKU and public link are created instantly. AI model photos are generated in the background — you can keep working."
+            : "After saving, the SKU and public link are created instantly. Your photo is shown on the public page until AI photos are turned on."}
         </div>
       </aside>
 
@@ -392,7 +394,9 @@ function SuccessDialog({ created, onAnother }: { created: Created | null; onAnot
             <Check className="size-6" />
           </div>
           <DialogTitle className="font-display text-2xl">Product saved</DialogTitle>
-          <DialogDescription>SKU, stock and public link are ready. AI model photos are being generated now.</DialogDescription>
+          <DialogDescription>
+            SKU, stock and public link are ready.{created?.jobId ? " AI model photos are being generated now." : ""}
+          </DialogDescription>
         </DialogHeader>
         {created && (
           <div className="space-y-3">

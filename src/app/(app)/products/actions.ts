@@ -6,7 +6,7 @@ import { z } from "zod";
 import { productInputSchema, productUpdateSchema } from "@/lib/validation/product";
 import { parseOrThrow, runAction } from "@/server/action";
 import { enqueueGeneration } from "@/server/ai/jobs";
-import { PROVIDER_LABEL, PROVIDER_NAMES, providerConfigured } from "@/server/ai/provider";
+import { aiConfigured, PROVIDER_LABEL, PROVIDER_NAMES, providerConfigured } from "@/server/ai/provider";
 import { kickWorker } from "@/server/ai/worker";
 import { logActivity } from "@/server/activity";
 import { requestMeta, requirePermission } from "@/server/auth/current";
@@ -116,6 +116,9 @@ export async function regenerateImagesAction(input: unknown) {
     const { id, provider } = parseOrThrow(z.object({ id: z.uuid(), provider: z.enum(PROVIDER_NAMES).optional() }), input);
     if (provider && !providerConfigured(provider)) {
       throw new AppError(`${PROVIDER_LABEL[provider]} is not set up on the server.`, "VALIDATION");
+    }
+    if (!provider && !aiConfigured()) {
+      throw new AppError("AI images are not set up yet. Add an AI image key on the server to turn them on.", "VALIDATION");
     }
     const job = await db.transaction(async (tx) => {
       const j = await enqueueGeneration(tx, id, user.id, provider ?? null);

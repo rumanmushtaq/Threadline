@@ -48,6 +48,19 @@ describe("product creation", () => {
     expect(logs).toHaveLength(1);
   });
 
+  it("skips the AI job when no AI image service is set up", async () => {
+    const token = process.env.CLOUDFLARE_API_TOKEN;
+    delete process.env.CLOUDFLARE_API_TOKEN;
+    try {
+      const created = await createProduct(db, ids.staffId, productInput(), await testImage());
+      expect(created.jobId).toBeNull();
+      expect(await db.select().from(aiGenerationJobs).where(eq(aiGenerationJobs.productId, created.id))).toHaveLength(0);
+      expect(await getPublicProduct(db, created.slug)).toBeTruthy();
+    } finally {
+      process.env.CLOUDFLARE_API_TOKEN = token;
+    }
+  });
+
   it("creates size rows only for the chosen group", async () => {
     const kids = await createProduct(
       db,

@@ -6,6 +6,7 @@ import { toMinor } from "@/lib/format";
 import { productUpdateSchema, type ProductInput } from "@/lib/validation/product";
 import { logActivity } from "./activity";
 import { enqueueGeneration } from "./ai/jobs";
+import { aiConfigured } from "./ai/provider";
 import type { Database, Executor } from "./db";
 import {
   aiGenerationJobs,
@@ -103,7 +104,7 @@ export async function createProduct(
         .values({ productId, slug: product.sku })
         .returning({ slug: publicProductLinks.slug });
 
-      const job = await enqueueGeneration(tx, productId, actorId);
+      const job = aiConfigured() ? await enqueueGeneration(tx, productId, actorId) : null;
 
       await logActivity(tx, {
         userId: actorId,

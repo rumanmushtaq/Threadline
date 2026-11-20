@@ -52,6 +52,13 @@ export function defaultProviderName(): string {
 
 let override: ImageProvider | null = null;
 
+/** False until the default AI service has its keys: products then keep their original photo only. */
+export function aiConfigured() {
+  if (override) return true;
+  const name = defaultProviderName();
+  return (PROVIDER_NAMES as readonly string[]).includes(name) && providerConfigured(name as ProviderName);
+}
+
 /** Tests swap in a stub provider; production always reads AI_IMAGE_PROVIDER. */
 export function setImageProviderForTests(p: ImageProvider | null) {
   override = p;
