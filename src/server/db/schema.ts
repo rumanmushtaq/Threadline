@@ -26,7 +26,10 @@ export const roleEnum = pgEnum("role", ["admin", "staff"]);
 export const audienceEnum = pgEnum("audience", ["kids", "youth", "adult"]);
 export const sizeEnum = pgEnum("size", ["XS", "S", "M", "L", "XL"]);
 export const productStatusEnum = pgEnum("product_status", ["active", "archived"]);
-export const imageKindEnum = pgEnum("image_kind", ["original", "ai_model", "marketing"]);
+// "photo": extra photos the team uploads by hand (model shots, details) while AI photos are not set up.
+export const imageKindEnum = pgEnum("image_kind", ["original", "ai_model", "marketing", "photo"]);
+// Customers only see approved photos. Hand-uploaded photos start "pending" until an admin checks them.
+export const imageReviewEnum = pgEnum("image_review", ["pending", "approved", "hidden"]);
 export const inventoryTxnTypeEnum = pgEnum("inventory_txn_type", [
   "initial",
   "stock_in",
@@ -226,6 +229,10 @@ export const productImages = pgTable(
     height: integer("height"),
     jobId: uuid("job_id").references(() => aiGenerationJobs.id),
     variant: smallint("variant").notNull().default(0),
+    review: imageReviewEnum("review").notNull().default("approved"),
+    uploadedBy: uuid("uploaded_by").references(() => users.id),
+    reviewedBy: uuid("reviewed_by").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [

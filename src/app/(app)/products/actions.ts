@@ -15,6 +15,7 @@ import { AppError } from "@/server/errors";
 import { recordStockMovement, stockMovementSchema } from "@/server/inventory";
 import { createProduct, setProductArchived, setProductPublished, updateProduct } from "@/server/products";
 import { createUploadTicket, limitUploadTickets, resolveUploadedImage, uploadedImageSchema } from "@/server/uploads";
+import { appUrl } from "@/server/app-url";
 
 /** Tells the browser where to upload the product photo (straight to Cloudinary when configured). */
 export async function prepareUploadAction() {
@@ -60,7 +61,7 @@ export async function createProductAction(formData: FormData) {
     after(() => kickWorker());
     revalidatePath("/products");
     revalidatePath("/dashboard");
-    return { ...created, publicUrl: `${process.env.APP_URL ?? ""}/p/${created.slug}` };
+    return { ...created, publicUrl: `${appUrl()}/p/${created.slug}` };
   });
 }
 

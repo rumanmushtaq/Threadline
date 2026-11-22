@@ -8,6 +8,7 @@ import { getCurrentCustomer } from "@/server/customer-session";
 import { db } from "@/server/db";
 import { getPublicProduct, recordView } from "@/server/public-products";
 import { ProductView } from "./product-view";
+import { appUrl } from "@/server/app-url";
 
 const load = cache((slug: string) => getPublicProduct(db, slug));
 
@@ -15,7 +16,7 @@ export async function generateMetadata({ params }: { params: Promise<{ sku: stri
   const p = await load((await params).sku);
   if (!p) return { title: "Product not found" };
   const image = p.images[0]?.url;
-  const abs = image && image.startsWith("/") ? `${process.env.APP_URL ?? ""}${image}` : image;
+  const abs = image && image.startsWith("/") ? `${appUrl()}${image}` : image;
   const description = `${formatMoney(p.price, p.currency)} · ${AUDIENCE_LABEL[p.audience]} · ${p.description.slice(0, 140)}`;
   return {
     title: { absolute: `${p.name} · ${p.brand}` },

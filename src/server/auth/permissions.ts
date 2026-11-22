@@ -10,6 +10,8 @@ export const PERMISSIONS = [
   "inventory.stock_in",
   "inventory.adjust",
   "inventory.stock_out",
+  "photo.upload",
+  "photo.review",
   "ai.view",
   "ai.regenerate",
   "link.view",
@@ -33,6 +35,8 @@ const STAFF: readonly Permission[] = [
   "product.create",
   "inventory.view",
   "inventory.stock_in",
+  // Staff can add photos; an admin checks them before customers see them.
+  "photo.upload",
   "ai.view",
   "link.view",
 ];

@@ -20,7 +20,7 @@ export type PublicProduct = {
   tagline: string | null;
   maxOrderQuantity: number;
   sizes: { size: Size; available: number }[];
-  images: { kind: "marketing" | "ai_model" | "original"; url: string; width: number | null; height: number | null }[];
+  images: { kind: "marketing" | "ai_model" | "photo" | "original"; url: string; width: number | null; height: number | null }[];
 };
 
 export async function getPublicProduct(db: Executor, slug: string): Promise<PublicProduct | null> {
@@ -54,12 +54,13 @@ export async function getPublicProduct(db: Executor, slug: string): Promise<Publ
     db
       .select({ kind: productImages.kind, key: sql<string | null>`CASE WHEN ${productImages.kind} = 'marketing' THEN ${productImages.storageKey} ELSE ${productImages.displayKey} END`, width: productImages.width, height: productImages.height, variant: productImages.variant, createdAt: productImages.createdAt })
       .from(productImages)
-      .where(eq(productImages.productId, row.productId)),
+      // Customers only ever see photos the team has approved.
+      .where(and(eq(productImages.productId, row.productId), eq(productImages.review, "approved"))),
     getSettings(db),
   ]);
 
-  // Newest AI set first (marketing cards, then model photos), the original last.
-  const rank = { marketing: 0, ai_model: 1, original: 2 } as const;
+  // Newest AI set first (marketing cards, then model photos and hand-added photos), the original last.
+  const rank = { marketing: 0, ai_model: 1, photo: 1, original: 2 } as const;
   const sorted = images.sort((a, b) => rank[a.kind] - rank[b.kind] || b.createdAt.getTime() - a.createdAt.getTime() || a.variant - b.variant);
 
   return {
@@ -102,7 +103,7 @@ export async function listLinks(db: Executor) {
       status: products.status,
       viewCount: publicProductLinks.viewCount,
       createdAt: publicProductLinks.createdAt,
-      thumbKey: sql<string | null>`(SELECT coalesce(pi.thumb_key, pi.storage_key) FROM product_images pi WHERE pi.product_id = products.id ORDER BY (pi.kind = 'marketing') DESC, pi.created_at DESC LIMIT 1)`,
+      thumbKey: sql<string | null>`(SELECT coalesce(pi.thumb_key, pi.storage_key) FROM product_images pi WHERE pi.product_id = products.id AND pi.review = 'approved' ORDER BY (pi.kind = 'marketing') DESC, pi.created_at DESC LIMIT 1)`,
     })
     .from(publicProductLinks)
     .innerJoin(products, eq(products.id, publicProductLinks.productId))
@@ -147,10 +148,11 @@ export async function listShop(db: Executor, f: ShopFilters) {
   if (f.audience) where.push(eq(products.audience, f.audience));
 
   const available = sql<number>`coalesce((SELECT sum(greatest(ps.on_hand - ps.reserved, 0)) FROM product_sizes ps WHERE ps.product_id = ${products.id}), 0)::int`;
-  // A customer-safe photo: the newest AI model photo, else the uploaded one (both re-encoded, no metadata).
+  // A customer-safe, approved photo: the newest AI or hand-added model photo, else the uploaded
+  // original (all re-encoded, no metadata).
   const image = sql<string | null>`(SELECT pi.thumb_key FROM product_images pi
-     WHERE pi.product_id = ${products.id} AND pi.kind IN ('ai_model', 'original') AND pi.display_key IS NOT NULL
-     ORDER BY (pi.kind = 'ai_model') DESC, pi.created_at DESC, pi.variant LIMIT 1)`;
+     WHERE pi.product_id = ${products.id} AND pi.kind IN ('ai_model', 'photo', 'original') AND pi.display_key IS NOT NULL AND pi.review = 'approved'
+     ORDER BY (pi.kind <> 'original') DESC, pi.created_at DESC, pi.variant LIMIT 1)`;
   const order =
     f.sort === "price-asc" ? asc(products.sellingPriceMinor) : f.sort === "price-desc" ? desc(products.sellingPriceMinor) : desc(products.createdAt);
 

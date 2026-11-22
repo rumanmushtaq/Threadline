@@ -4,10 +4,11 @@ import { AlertCircle, Download, Loader2, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
-type Img = { id: string; kind: "original" | "ai_model" | "marketing"; url: string; originalUrl: string; thumbUrl: string; variant: number };
+type Img = { id: string; kind: "original" | "ai_model" | "marketing" | "photo"; review: "pending" | "approved" | "hidden"; url: string; originalUrl: string; thumbUrl: string; variant: number };
 type Job = { status: "pending" | "processing" | "completed" | "failed"; attempts: number; maxAttempts: number; lastError: string | null } | null;
 
-const KIND_LABEL = { original: "Original", ai_model: "AI photo", marketing: "Marketing card" } as const;
+const KIND_LABEL = { original: "Original", ai_model: "AI photo", marketing: "Marketing card", photo: "Added photo" } as const;
+const REVIEW_NOTE = { pending: "Waiting for check", hidden: "Hidden from customers", approved: null } as const;
 
 export function ProductGallery({ images, job }: { images: Img[]; job: Job }) {
   const ordered = [...images].sort((a, b) => order(a.kind) - order(b.kind));
@@ -27,6 +28,9 @@ export function ProductGallery({ images, job }: { images: Img[]; job: Job }) {
         {active && (
           <div className="absolute top-3 left-3 flex gap-2">
             <span className="rounded-full bg-background/90 px-2.5 py-1 text-xs font-medium backdrop-blur">{KIND_LABEL[active.kind]}</span>
+            {REVIEW_NOTE[active.review] && (
+              <span className="rounded-full bg-warning/90 px-2.5 py-1 text-xs font-medium text-foreground backdrop-blur">{REVIEW_NOTE[active.review]}</span>
+            )}
           </div>
         )}
         {active && (
@@ -80,5 +84,5 @@ export function ProductGallery({ images, job }: { images: Img[]; job: Job }) {
 }
 
 function order(kind: Img["kind"]) {
-  return kind === "marketing" ? 0 : kind === "ai_model" ? 1 : 2;
+  return kind === "marketing" ? 0 : kind === "ai_model" || kind === "photo" ? 1 : 2;
 }

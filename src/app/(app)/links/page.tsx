@@ -9,13 +9,14 @@ import { db } from "@/server/db";
 import { listLinks } from "@/server/public-products";
 import { fileUrl } from "@/server/storage";
 import { LinkRowActions } from "./link-actions";
+import { appUrl } from "@/server/app-url";
 
 export const metadata: Metadata = { title: "Public product links" };
 
 export default async function LinksPage() {
   await requirePageUser("link.view");
   const links = await listLinks(db);
-  const appUrl = process.env.APP_URL ?? "";
+  const siteUrl = appUrl();
   return (
     <>
       <PageHeader
@@ -40,7 +41,7 @@ export default async function LinksPage() {
             <TableBody>
               {links.map((l) => {
                 const live = l.isActive && l.isPublished && l.status === "active";
-                const url = `${appUrl}/p/${l.slug}`;
+                const url = `${siteUrl}/p/${l.slug}`;
                 const thumb = fileUrl(l.thumbKey);
                 return (
                   <TableRow key={l.slug}>

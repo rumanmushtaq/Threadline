@@ -10,6 +10,7 @@ import { listCategories, listProducts, productFiltersSchema } from "@/server/pro
 import { getSettings } from "@/server/settings";
 import { ProductFiltersBar } from "./product-filters";
 import { ProductsTable } from "./products-table";
+import { appUrl } from "@/server/app-url";
 
 export const metadata: Metadata = { title: "Products" };
 
@@ -58,7 +59,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           total={result.total}
           threshold={result.lowStockThreshold}
           currency={settings.currencySymbol}
-          appUrl={process.env.APP_URL ?? ""}
+          appUrl={appUrl()}
         />
       )}
     </>

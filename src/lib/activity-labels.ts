@@ -21,6 +21,10 @@ const LABELS: Record<string, string> = {
   "ai.regenerate_requested": "requested new AI images",
 
   "ai.failed": "failed to generate AI images",
+  "photo.added": "added a product photo",
+  "photo.approved": "approved a product photo",
+  "photo.hidden": "hid a product photo",
+  "photo.deleted": "deleted a product photo",
   "sale.recorded": "recorded a shop sale",
   "sale.cancelled": "cancelled a shop sale",
   "order.received": "placed an order",

@@ -16,6 +16,8 @@ import { getProductDetail } from "@/server/products";
 import { getSettings } from "@/server/settings";
 import { ProductActions } from "./product-actions";
 import { ProductGallery } from "./product-gallery";
+import { ProductPhotos } from "./product-photos";
+import { appUrl } from "@/server/app-url";
 
 export const metadata: Metadata = { title: "Product" };
 
@@ -44,7 +46,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const available = onHand - reserved;
   const profit = product.sellingPriceMinor - product.purchasePriceMinor;
   const latestJob = product.jobs[0];
-  const appUrl = process.env.APP_URL ?? "";
+  const siteUrl = appUrl();
 
   return (
     <div className="space-y-6">
@@ -71,7 +73,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             name={product.name}
             archived={product.status === "archived"}
             published={product.isPublished}
-            publicUrl={`${appUrl}/p/${product.link?.slug ?? product.sku}`}
+            publicUrl={`${siteUrl}/p/${product.link?.slug ?? product.sku}`}
             aiBusy={latestJob?.status === "pending" || latestJob?.status === "processing"}
             providers={availableProviders().map((name) => ({ name, label: PROVIDER_LABEL[name] }))}
           />
@@ -80,7 +82,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <ProductGallery
-          images={product.images.map((i) => ({ id: i.id, kind: i.kind, url: i.url, originalUrl: i.originalUrl, thumbUrl: i.thumbUrl, variant: i.variant }))}
+          images={product.images.map((i) => ({ id: i.id, kind: i.kind, review: i.review, url: i.url, originalUrl: i.originalUrl, thumbUrl: i.thumbUrl, variant: i.variant }))}
           job={latestJob ? { status: latestJob.status, attempts: latestJob.attempts, maxAttempts: latestJob.maxAttempts, lastError: latestJob.lastError } : null}
         />
 
@@ -100,6 +102,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           </section>
         </div>
       </div>
+
+      <ProductPhotos
+        productId={product.id}
+        archived={product.status === "archived"}
+        photos={product.images.map((i) => ({ id: i.id, kind: i.kind, review: i.review, thumbUrl: i.thumbUrl }))}
+      />
 
       <section id="inventory" className="scroll-mt-20 rounded-xl border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">

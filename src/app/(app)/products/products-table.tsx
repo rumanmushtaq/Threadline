@@ -255,9 +255,10 @@ export function Pager({ page, pageCount, total }: { page: number; pageCount: num
               <ChevronLeft /> Previous
             </Link>
           ) : (
-            <span>
+            // No wrapper: the icon and text must sit in the button's own flex row.
+            <>
               <ChevronLeft /> Previous
-            </span>
+            </>
           )}
         </Button>
         <Button variant="outline" size="sm" asChild={page < pageCount} disabled={page >= pageCount}>
@@ -266,9 +267,9 @@ export function Pager({ page, pageCount, total }: { page: number; pageCount: num
               Next <ChevronRight />
             </Link>
           ) : (
-            <span>
+            <>
               Next <ChevronRight />
-            </span>
+            </>
           )}
         </Button>
       </div>

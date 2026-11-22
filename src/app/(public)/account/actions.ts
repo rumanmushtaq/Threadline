@@ -22,12 +22,7 @@ import { db } from "@/server/db";
 import { AppError } from "@/server/errors";
 import { supabaseServer } from "@/server/supabase/next";
 import { passwordSchema } from "@/server/users";
-
-function appUrl() {
-  const url = process.env.APP_URL;
-  if (!url) throw new Error("APP_URL is not set");
-  return url;
-}
+import { appUrl } from "@/server/app-url";
 
 export async function customerLoginAction(input: unknown) {
   return runAction(async () => {

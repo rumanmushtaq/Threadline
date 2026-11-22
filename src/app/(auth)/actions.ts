@@ -11,6 +11,7 @@ import { db } from "@/server/db";
 import { AppError } from "@/server/errors";
 import { supabaseServer } from "@/server/supabase/next";
 import { passwordSchema, setOwnPassword } from "@/server/users";
+import { appUrl } from "@/server/app-url";
 
 export async function loginAction(input: { email: string; password: string }) {
   return runAction(async () => {
@@ -32,9 +33,7 @@ export async function forgotPasswordAction(input: unknown) {
   return runAction(async () => {
     const { email } = parseOrThrow(forgotPasswordSchema, input);
     const { ip } = await requestMeta();
-    const appUrl = process.env.APP_URL;
-    if (!appUrl) throw new Error("APP_URL is not set");
-    await requestPasswordReset(db, await supabaseServer(), email, { ip, appUrl });
+    await requestPasswordReset(db, await supabaseServer(), email, { ip, appUrl: appUrl() });
     return null;
   });
 }
