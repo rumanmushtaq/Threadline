@@ -18,6 +18,7 @@ import { orderInputSchema } from "@/lib/validation/order";
 import type { PublicProduct } from "@/server/public-products";
 import { PublicHeader } from "../../public-header";
 import { placeOrderAction } from "./actions";
+import { StockBadge } from "@/components/shop/stock-badge";
 
 export type SavedCustomer = { name: string; phone: string | null; whatsapp: string | null; address: string | null; city: string | null };
 
@@ -45,7 +46,8 @@ export function ProductView({ product, customer }: { product: PublicProduct; cus
 
       <main className="mx-auto grid max-w-6xl gap-8 px-4 py-6 pb-28 sm:px-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:gap-12 md:py-10 md:pb-10">
         <section className="space-y-3">
-          <div className="overflow-hidden rounded-2xl bg-muted">
+          <div className="relative overflow-hidden rounded-2xl bg-muted">
+            <StockBadge available={product.sizes.reduce((n, s) => n + s.available, 0)} className="absolute top-3 left-3 z-10" />
             {image ? (
               // eslint-disable-next-line @next/next/no-img-element -- CDN or local storage URL
               <img src={image.url} alt={product.name} className="aspect-[4/5] w-full object-cover" />

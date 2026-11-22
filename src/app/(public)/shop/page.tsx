@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, Search, Shirt } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { StockBadge } from "@/components/shop/stock-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/format";
@@ -69,11 +70,7 @@ function ProductCard({ item, currency }: { item: ShopItem; currency: string }) {
             <Shirt className="size-8 text-muted-foreground" />
           </div>
         )}
-        {soldOut ? (
-          <span className="absolute top-3 left-3 rounded-full bg-background/90 px-2.5 py-1 text-xs font-medium">Sold out</span>
-        ) : item.available <= 5 ? (
-          <span className="absolute top-3 left-3 rounded-full bg-brand px-2.5 py-1 text-xs font-medium text-brand-foreground">Only {item.available} left</span>
-        ) : null}
+        <StockBadge available={item.available} className="absolute top-3 left-3" />
       </div>
       <div className="space-y-1 px-0.5">
         <p className="text-xs text-muted-foreground">{[item.category, AUDIENCE_LABEL[item.audience]].filter(Boolean).join(" · ")}</p>

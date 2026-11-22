@@ -186,7 +186,8 @@ test("admin is notified and moves the order to delivered", async ({ page }) => {
   await expect(page.getByText("Sold (delivered)")).toBeVisible();
 
   await page.goto("/dashboard");
-  await expect(page.getByText("Realized: Rs. 1,400 from delivered orders")).toBeVisible();
+  // The delivered order counts as a website sale on the money cards.
+  await expect(page.getByText("1 delivered order · profit Rs. 1,400")).toBeVisible();
 });
 
 test("admin unpublishes the product and the public link stops working", async ({ page, request }) => {
