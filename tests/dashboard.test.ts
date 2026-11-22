@@ -80,7 +80,8 @@ describe("dashboard money", () => {
       net: -100_000,
       piecesBought: 5,
       piecesSold: 2,
-      delivered: 1,
+      website: { sales: 300_000, count: 1, pieces: 2, profit: 140_000 },
+      shop: { sales: 0, count: 0 },
       orders: 1,
     });
 

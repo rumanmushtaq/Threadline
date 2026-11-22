@@ -50,6 +50,7 @@ export const reservationPolicyEnum = pgEnum("reservation_policy", ["on_order", "
 
 export const productSkuSeq = pgSequence("product_sku_seq", { startWith: 1, increment: 1 });
 export const orderNumberSeq = pgSequence("order_number_seq", { startWith: 1, increment: 1 });
+export const shopSaleNumberSeq = pgSequence("shop_sale_number_seq", { startWith: 1, increment: 1 });
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
@@ -392,6 +393,44 @@ export const inventoryTransactions = pgTable(
   (t) => [
     index("inventory_txn_product_idx").on(t.productId, t.createdAt),
     index("inventory_txn_created_idx").on(t.createdAt),
+  ],
+);
+
+/**
+ * A sale made in person (cash in the shop). Website sales are orders; the dashboard and the
+ * sales page count both. Price and cost are saved on the row, so later price edits never
+ * change past profit. A mistake is cancelled (stock goes back), never deleted.
+ */
+export const shopSales = pgTable(
+  "shop_sales",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    saleNumber: varchar("sale_number", { length: 20 })
+      .notNull()
+      .unique()
+      .default(sql`next_code('SAL-', 'shop_sale_number_seq')`),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id),
+    productSizeId: uuid("product_size_id")
+      .notNull()
+      .references(() => productSizes.id),
+    size: sizeEnum("size").notNull(),
+    quantity: integer("quantity").notNull(),
+    unitPriceMinor: integer("unit_price_minor").notNull(),
+    unitCostMinor: integer("unit_cost_minor").notNull(),
+    soldAt: timestamp("sold_at", { withTimezone: true }).notNull().defaultNow(),
+    note: varchar("note", { length: 200 }),
+    recordedBy: uuid("recorded_by").references(() => users.id),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancelledBy: uuid("cancelled_by").references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("shop_sales_sold_at_idx").on(t.soldAt),
+    index("shop_sales_product_idx").on(t.productId),
+    check("shop_sales_quantity_positive", sql`${t.quantity} > 0`),
+    check("shop_sales_amounts_nonneg", sql`${t.unitPriceMinor} >= 0 AND ${t.unitCostMinor} >= 0`),
   ],
 );
 

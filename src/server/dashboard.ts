@@ -12,20 +12,27 @@ const threshold = sql`(SELECT low_stock_threshold FROM settings WHERE id = 1)`;
 
 /**
  * Money for the chosen dates. Purchases are pieces added (new products and stock-in) at the
- * product's purchase price; sales and profit come from orders delivered in the range, at the
- * price and cost saved on each order line.
+ * product's purchase price. Sales come from two places: shop sales (in person, not cancelled)
+ * and website orders delivered in the range, each at the price and cost saved on the row.
  */
 async function moneyInRange(db: Executor, range: ResolvedRange) {
   const from = range.from ?? new Date(0);
   const [r] = (
     await db.execute<Record<string, Num>>(sql`
-      WITH sold AS (
+      WITH web AS (
         SELECT coalesce(sum(oi.unit_price_minor::bigint * oi.quantity), 0) AS sales,
-               coalesce(sum(oi.unit_cost_minor::bigint * oi.quantity), 0) AS cost_of_sold,
-               coalesce(sum(oi.quantity), 0) AS pieces_sold,
-               count(DISTINCT o.id) AS delivered
+               coalesce(sum(oi.unit_cost_minor::bigint * oi.quantity), 0) AS cost,
+               coalesce(sum(oi.quantity), 0) AS pieces,
+               count(DISTINCT o.id) AS count
           FROM orders o JOIN order_items oi ON oi.order_id = o.id
          WHERE o.status = 'delivered' AND o.delivered_at >= ${from} AND o.delivered_at < ${range.to}
+      ), shop AS (
+        SELECT coalesce(sum(unit_price_minor::bigint * quantity), 0) AS sales,
+               coalesce(sum(unit_cost_minor::bigint * quantity), 0) AS cost,
+               coalesce(sum(quantity), 0) AS pieces,
+               count(*) AS count
+          FROM shop_sales
+         WHERE cancelled_at IS NULL AND sold_at >= ${from} AND sold_at < ${range.to}
       ), bought AS (
         SELECT coalesce(sum(it.on_hand_delta::bigint * p.purchase_price_minor), 0) AS purchases,
                coalesce(sum(it.on_hand_delta), 0) AS pieces_bought
@@ -34,11 +41,16 @@ async function moneyInRange(db: Executor, range: ResolvedRange) {
       ), placed AS (
         SELECT count(*) AS orders FROM orders WHERE created_at >= ${from} AND created_at < ${range.to}
       )
-      SELECT * FROM sold, bought, placed`)
+      SELECT web.sales AS web_sales, web.cost AS web_cost, web.pieces AS web_pieces, web.count AS web_count,
+             shop.sales AS shop_sales, shop.cost AS shop_cost, shop.pieces AS shop_pieces, shop.count AS shop_count,
+             bought.purchases, bought.pieces_bought, placed.orders
+        FROM web, shop, bought, placed`)
   ).rows;
-  const sales = n(r.sales);
+  const shop = { sales: n(r.shop_sales), cost: n(r.shop_cost), pieces: n(r.shop_pieces), count: n(r.shop_count) };
+  const website = { sales: n(r.web_sales), cost: n(r.web_cost), pieces: n(r.web_pieces), count: n(r.web_count) };
+  const sales = shop.sales + website.sales;
+  const costOfSold = shop.cost + website.cost;
   const purchases = n(r.purchases);
-  const costOfSold = n(r.cost_of_sold);
   return {
     purchases,
     sales,
@@ -46,11 +58,14 @@ async function moneyInRange(db: Executor, range: ResolvedRange) {
     profit: sales - costOfSold,
     net: sales - purchases,
     piecesBought: n(r.pieces_bought),
-    piecesSold: n(r.pieces_sold),
-    delivered: n(r.delivered),
+    piecesSold: shop.pieces + website.pieces,
+    shop: { ...shop, profit: shop.sales - shop.cost },
+    website: { ...website, profit: website.sales - website.cost },
     orders: n(r.orders),
   };
 }
+export type MoneyInRange = Awaited<ReturnType<typeof moneyInRange>>;
+export { moneyInRange };
 
 /** Pieces in and out per day (short ranges) or per month (long ones), in the shop's time zone. */
 async function movementInRange(db: Executor, range: ResolvedRange) {

@@ -112,3 +112,13 @@ export function resolveRange(params: RangeParams, now = new Date(), tz = BUSINES
 function fmt(day: Ymd) {
   return new Date(Date.UTC(day.y, day.m - 1, day.d)).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
+
+/** Today's date in the shop's time zone, YYYY-MM-DD. */
+export function businessToday(now = new Date(), tz = BUSINESS_TZ) {
+  return iso(ymdIn(tz, now));
+}
+
+/** Midday of a calendar day in the shop's time zone: a safe moment for a sale with no time. */
+export function businessMidday(day: string, tz = BUSINESS_TZ) {
+  return new Date(midnight(tz, parse(day)).getTime() + 12 * 3_600_000);
+}

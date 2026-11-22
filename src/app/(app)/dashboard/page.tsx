@@ -1,6 +1,8 @@
-import { AlertTriangle, ArrowDownToLine, ArrowRight, Boxes, CircleDollarSign, HandCoins, PackageX, Plus, Scale, ShoppingBag, Shirt, Sparkles, TrendingUp, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes, CircleDollarSign, PackageX, Plus, ShoppingBag, Shirt, Sparkles, TrendingUp, Wallet } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Kpi } from "@/components/app/kpi";
+import { MoneyCards } from "@/components/app/money-cards";
 import { PageHeader } from "@/components/app/page-header";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +25,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const range = resolveRange(rangeParamsSchema.parse(await searchParams));
   const d = await dashboardData(db, { includeOrders: seeOrders, range });
   const m = d.money;
+  const salesQuery = new URLSearchParams({ range: range.preset, ...(range.preset === "custom" ? { from: range.fromDay ?? "", to: range.toDay } : {}) }).toString();
   const s = d.stats;
   const cur = d.currency;
   const seeActivity = can(user.role, "activity.view");
@@ -48,26 +51,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
       {m && (
         <section className="space-y-3">
-          <SectionTitle title={`Money · ${range.label}`} note="Sales and profit count orders delivered in these dates." />
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Kpi icon={ArrowDownToLine} label="Total purchases" value={formatMoney(m.purchases, cur)} note={`${count(m.piecesBought, "piece")} bought`} />
-            <Kpi icon={HandCoins} label="Total sales" value={formatMoney(m.sales, cur)} note={`${count(m.piecesSold, "piece")} · ${count(m.delivered, "delivered order")}`} />
-            <Kpi
-              icon={TrendingUp}
-              label="Total profit"
-              value={formatMoney(m.profit, cur)}
-              note={`sales minus their cost (${formatMoney(m.costOfSold, cur)})`}
-              tone={m.profit < 0 ? "bad" : undefined}
-              accent
-            />
-            <Kpi
-              icon={Scale}
-              label="Sales minus purchases"
-              value={formatMoney(m.net, cur)}
-              note={`${count(m.orders, "order")} placed in these dates`}
-              tone={m.net < 0 ? "bad" : undefined}
-            />
-          </div>
+          <SectionTitle title={`Money · ${range.label}`} note="Shop sales plus website orders delivered in these dates." />
+          <MoneyCards m={m} currency={cur} salesHref={(c) => `/sales?${salesQuery}&channel=${c}`} />
         </section>
       )}
 
@@ -203,38 +188,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     </div>
   );
 }
-
-function Kpi({
-  icon: Icon,
-  label,
-  value,
-  note,
-  href,
-  accent,
-  tone,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-  note?: string;
-  href?: string;
-  accent?: boolean;
-  tone?: "warn" | "bad";
-}) {
-  const body = (
-    <div className={`h-full rounded-xl border p-4 transition ${accent ? "bg-primary text-primary-foreground" : "bg-card"} ${href ? "hover:border-foreground/25" : ""}`}>
-      <div className="flex items-center justify-between">
-        <p className={`text-xs font-medium ${accent ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{label}</p>
-        <Icon className={`size-4 ${tone === "warn" ? "text-warning" : tone === "bad" ? "text-destructive" : accent ? "text-brand" : "text-muted-foreground"}`} />
-      </div>
-      <p className="mt-2 truncate text-xl font-semibold tracking-tight tabular sm:text-2xl">{value}</p>
-      {note && <p className={`mt-1 truncate text-xs ${accent ? "text-primary-foreground/60" : "text-muted-foreground"}`}>{note}</p>}
-    </div>
-  );
-  return href ? <Link href={href}>{body}</Link> : body;
-}
-
-const count = (n: number, word: string) => `${formatNumber(n)} ${word}${n === 1 ? "" : "s"}`;
 
 function SectionTitle({ title, note }: { title: string; note: string }) {
   return (

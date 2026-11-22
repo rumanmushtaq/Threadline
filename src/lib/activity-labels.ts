@@ -21,6 +21,8 @@ const LABELS: Record<string, string> = {
   "ai.regenerate_requested": "requested new AI images",
 
   "ai.failed": "failed to generate AI images",
+  "sale.recorded": "recorded a shop sale",
+  "sale.cancelled": "cancelled a shop sale",
   "order.received": "placed an order",
   "order.confirmed": "confirmed an order",
   "order.processing": "moved an order to processing",
@@ -41,5 +43,5 @@ export function activityLabel(action: string) {
 export function activitySubject(metadata: Record<string, unknown> | null | undefined) {
   if (!metadata) return null;
   const m = metadata as Record<string, string | undefined>;
-  return m.orderNumber ?? m.sku ?? m.email ?? null;
+  return m.orderNumber ?? m.saleNumber ?? m.sku ?? m.email ?? null;
 }

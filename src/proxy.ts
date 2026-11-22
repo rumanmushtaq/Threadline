@@ -46,6 +46,7 @@ export const config = {
     "/inventory/:path*",
     "/ai-images/:path*",
     "/links/:path*",
+    "/sales/:path*",
     "/orders/:path*",
     "/customers/:path*",
     "/activity/:path*",

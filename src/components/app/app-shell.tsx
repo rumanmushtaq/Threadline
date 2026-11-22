@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Banknote,
   Activity,
   Boxes,
   LayoutDashboard,
@@ -58,6 +59,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   inventory: Boxes,
   ai: Sparkles,
   links: Link2,
+  sales: Banknote,
   orders: ShoppingBag,
   customers: Users,
   activity: Activity,
