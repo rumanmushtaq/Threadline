@@ -1,6 +1,6 @@
 "use client";
 
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { AUDIENCE_LABEL, type Audience } from "@/lib/sizes";
 
@@ -19,10 +19,14 @@ const audienceConfig = {
 
 export function DashboardCharts({
   movement,
+  movementUnit,
+  rangeLabel,
   byCategory,
   byAudience,
 }: {
   movement: { day: string; added: number; removed: number }[];
+  movementUnit: "day" | "month";
+  rangeLabel: string;
   byCategory: { name: string; products: number; pieces: number }[];
   byAudience: { audience: string; pieces: number }[];
 }) {
@@ -37,27 +41,30 @@ export function DashboardCharts({
 
   return (
     <section className="grid gap-6 lg:grid-cols-3">
-      <ChartCard title="Stock movement" subtitle="Pieces in and out, last 30 days" className="lg:col-span-2">
+      <ChartCard title="Stock movement" subtitle={`Pieces in and out per ${movementUnit} · ${rangeLabel}`} className="lg:col-span-2">
         {anyMovement ? (
           <ChartContainer config={movementConfig} className="h-64 w-full">
-            <AreaChart data={movement} margin={{ left: -16, right: 8, top: 8 }}>
+            <BarChart data={movement} margin={{ left: -16, right: 8, top: 8 }}>
               <CartesianGrid vertical={false} />
               <XAxis
                 dataKey="day"
                 tickLine={false}
                 axisLine={false}
                 minTickGap={28}
-                tickFormatter={(d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                tickFormatter={(d: string) =>
+                  new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", movementUnit === "month" ? { month: "short", year: "2-digit", timeZone: "UTC" } : { day: "numeric", month: "short", timeZone: "UTC" })
+                }
               />
               <YAxis tickLine={false} axisLine={false} allowDecimals={false} width={44} />
-              <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
-              <Area dataKey="added" type="monotone" fill="var(--color-added)" fillOpacity={0.18} stroke="var(--color-added)" strokeWidth={2} />
-              <Area dataKey="removed" type="monotone" fill="var(--color-removed)" fillOpacity={0.14} stroke="var(--color-removed)" strokeWidth={2} />
+              <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
+              {/* Bars, not areas: a one-day range still shows something. */}
+              <Bar dataKey="added" fill="var(--color-added)" radius={[3, 3, 0, 0]} maxBarSize={28} />
+              <Bar dataKey="removed" fill="var(--color-removed)" radius={[3, 3, 0, 0]} maxBarSize={28} />
               <ChartLegend content={<ChartLegendContent />} />
-            </AreaChart>
+            </BarChart>
           </ChartContainer>
         ) : (
-          <EmptyChart text="Stock movements appear here as you add products and stock." />
+          <EmptyChart text="No stock moved in these dates." />
         )}
       </ChartCard>
 

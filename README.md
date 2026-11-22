@@ -92,6 +92,8 @@ Set `STORAGE_DRIVER=cloudinary` and `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY
 Jobs start right after a product is saved. A sweep handles retries, crashed jobs and pending-order expiry. Run the sweep one of two ways:
 
 - **Vercel:** `vercel.json` calls `/api/cron/worker` once a day (03:00 UTC), the most the Hobby plan allows. Set `CRON_SECRET` (32+ characters). New AI jobs still start at once (the request kicks the worker); the cron handles retries, crashed jobs and pending-order expiry. For faster retries, call the URL every minute from an external scheduler (e.g. cron-job.org) with `Authorization: Bearer <CRON_SECRET>`, or on Vercel Pro change the schedule to `* * * * *`.
+- **Region:** `vercel.json` runs functions in `hnd1` (Tokyo), next to the Supabase database in `ap-northeast-1`. Each page makes several database round trips, so a far-away function region makes every page slow. If your database is elsewhere, change `regions` to the closest Vercel region.
+- **Time zone:** the dashboard date filter uses `BUSINESS_TIMEZONE` (default `Asia/Karachi`) for where days start and end.
 - **VPS / Docker:** run `pnpm worker` next to `pnpm start`.
 
 Both can run at the same time safely, because jobs are claimed with `FOR UPDATE SKIP LOCKED`.

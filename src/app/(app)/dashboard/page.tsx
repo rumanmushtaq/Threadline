@@ -1,23 +1,28 @@
-import { AlertTriangle, ArrowRight, Boxes, CircleDollarSign, PackageX, Plus, ShoppingBag, Shirt, Sparkles, TrendingUp, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowDownToLine, ArrowRight, Boxes, CircleDollarSign, HandCoins, PackageX, Plus, Scale, ShoppingBag, Shirt, Sparkles, TrendingUp, Wallet } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/app/page-header";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
 import { Button } from "@/components/ui/button";
 import { activityLabel, activitySubject } from "@/lib/activity-labels";
+import { rangeParamsSchema } from "@/lib/date-range";
 import { formatMoney, formatNumber, timeAgo } from "@/lib/format";
 import { requirePageUser } from "@/server/auth/current";
 import { can } from "@/server/auth/permissions";
 import { dashboardData } from "@/server/dashboard";
+import { resolveRange } from "@/server/date-range";
 import { db } from "@/server/db";
 import { DashboardCharts } from "./dashboard-charts";
+import { RangePicker } from "./range-picker";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await requirePageUser("dashboard.view");
   const seeOrders = can(user.role, "order.view");
-  const d = await dashboardData(db, { includeOrders: seeOrders });
+  const range = resolveRange(rangeParamsSchema.parse(await searchParams));
+  const d = await dashboardData(db, { includeOrders: seeOrders, range });
+  const m = d.money;
   const s = d.stats;
   const cur = d.currency;
   const seeActivity = can(user.role, "activity.view");
@@ -28,28 +33,52 @@ export default async function DashboardPage() {
         title={`Hello, ${user.name.split(" ")[0]}`}
         description="Live numbers from your inventory and orders."
         actions={
-          can(user.role, "product.create") && (
-            <Button asChild>
-              <Link href="/products/new">
-                <Plus /> Create product
-              </Link>
-            </Button>
-          )
+          <>
+            <RangePicker preset={range.preset} label={range.label} fromDay={range.fromDay} toDay={range.toDay} />
+            {can(user.role, "product.create") && (
+              <Button asChild>
+                <Link href="/products/new">
+                  <Plus /> Create product
+                </Link>
+              </Button>
+            )}
+          </>
         }
       />
+
+      {m && (
+        <section className="space-y-3">
+          <SectionTitle title={`Money · ${range.label}`} note="Sales and profit count orders delivered in these dates." />
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Kpi icon={ArrowDownToLine} label="Total purchases" value={formatMoney(m.purchases, cur)} note={`${count(m.piecesBought, "piece")} bought`} />
+            <Kpi icon={HandCoins} label="Total sales" value={formatMoney(m.sales, cur)} note={`${count(m.piecesSold, "piece")} · ${count(m.delivered, "delivered order")}`} />
+            <Kpi
+              icon={TrendingUp}
+              label="Total profit"
+              value={formatMoney(m.profit, cur)}
+              note={`sales minus their cost (${formatMoney(m.costOfSold, cur)})`}
+              tone={m.profit < 0 ? "bad" : undefined}
+              accent
+            />
+            <Kpi
+              icon={Scale}
+              label="Sales minus purchases"
+              value={formatMoney(m.net, cur)}
+              note={`${count(m.orders, "order")} placed in these dates`}
+              tone={m.net < 0 ? "bad" : undefined}
+            />
+          </div>
+        </section>
+      )}
+
+      <SectionTitle title="Stock right now" note="Live totals, not affected by the date filter." />
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi icon={Shirt} label="Total products" value={formatNumber(s.products)} note={`${s.kids} kids · ${s.youth} youth · ${s.adult} adult`} />
         <Kpi icon={Boxes} label="Available pieces" value={formatNumber(s.available)} note={`${formatNumber(s.pieces)} on hand · ${formatNumber(s.reserved)} reserved`} />
-        <Kpi icon={Wallet} label="Total purchase value" value={formatMoney(s.purchaseValue, cur)} note="cost of stock on hand" />
-        <Kpi icon={CircleDollarSign} label="Potential sales value" value={formatMoney(s.salesValue, cur)} note="at target prices" />
-        <Kpi
-          icon={TrendingUp}
-          label="Estimated gross profit"
-          value={formatMoney(s.estimatedProfit, cur)}
-          note={seeOrders ? `Realized: ${formatMoney(s.realizedProfit, cur)} from delivered orders` : "if all stock sells at target prices"}
-          accent
-        />
+        <Kpi icon={Wallet} label="Stock value at cost" value={formatMoney(s.purchaseValue, cur)} note="what the stock on hand cost" />
+        <Kpi icon={CircleDollarSign} label="Stock value at selling price" value={formatMoney(s.salesValue, cur)} note="at target prices" />
+        <Kpi icon={TrendingUp} label="Profit if all stock sells" value={formatMoney(s.estimatedProfit, cur)} note="at target prices" />
         <Kpi icon={AlertTriangle} label="Low stock products" value={formatNumber(s.lowStock)} note={`${d.threshold} or fewer pieces left`} href="/inventory?stock=low" tone={s.lowStock ? "warn" : undefined} />
         <Kpi icon={PackageX} label="Out of stock" value={formatNumber(s.outOfStock)} note="no pieces available" href="/inventory?stock=out" tone={s.outOfStock ? "bad" : undefined} />
         {seeOrders ? (
@@ -59,7 +88,7 @@ export default async function DashboardPage() {
         )}
       </section>
 
-      <DashboardCharts movement={d.movement} byCategory={d.byCategory} byAudience={d.byAudience} />
+      <DashboardCharts movement={d.movement.points} movementUnit={d.movement.unit} rangeLabel={range.label} byCategory={d.byCategory} byAudience={d.byAudience} />
 
       <section className="grid gap-6 lg:grid-cols-3">
         <Panel title="Recent products" href="/products">
@@ -203,6 +232,17 @@ function Kpi({
     </div>
   );
   return href ? <Link href={href}>{body}</Link> : body;
+}
+
+const count = (n: number, word: string) => `${formatNumber(n)} ${word}${n === 1 ? "" : "s"}`;
+
+function SectionTitle({ title, note }: { title: string; note: string }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+      <h2 className="text-sm font-medium">{title}</h2>
+      <p className="text-xs text-muted-foreground">{note}</p>
+    </div>
+  );
 }
 
 function Panel({ title, href, children, className = "" }: { title: string; href?: string; children: React.ReactNode; className?: string }) {
