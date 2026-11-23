@@ -163,13 +163,14 @@ export function ProductView({ product, customer }: { product: PublicProduct; cus
           if (!o) setPlaced(null);
         }}
       >
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
+        <SheetContent side="right" className="gap-0 overflow-y-auto data-[side=right]:w-full sm:data-[side=right]:max-w-lg">
           {placed ? (
             <Confirmation placed={placed} currency={product.currency} onClose={() => setOpen(false)} />
           ) : (
             <OrderForm
               customer={customer}
               product={product}
+              imageUrl={product.images[0]?.url ?? null}
               size={size}
               quantity={qty}
               onPlaced={(p) => setPlaced(p)}
@@ -195,12 +196,14 @@ type FormValues = z.input<typeof formSchema>;
 function OrderForm({
   customer,
   product,
+  imageUrl,
   size,
   quantity,
   onPlaced,
 }: {
   customer: SavedCustomer | null;
   product: PublicProduct;
+  imageUrl: string | null;
   size: Size | null;
   quantity: number;
   onPlaced: (p: Placed) => void;
@@ -247,14 +250,29 @@ function OrderForm({
 
   return (
     <form onSubmit={submit} noValidate className="flex h-full flex-col">
-      <SheetHeader>
+      <SheetHeader className="border-b pb-4">
         <SheetTitle className="font-display text-2xl">Your order</SheetTitle>
-        <SheetDescription>
-          {product.name} · Size {size} · {quantity} {quantity === 1 ? "piece" : "pieces"} ·{" "}
-          <span className="font-medium text-foreground">{formatMoney(product.price * quantity, product.currency)}</span>
-        </SheetDescription>
+        <SheetDescription>Check the piece, add where to deliver, and place your order.</SheetDescription>
       </SheetHeader>
-      <div className="flex-1 space-y-4 px-4">
+      {/* What is being ordered */}
+      <div className="flex gap-4 border-b p-4">
+        {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- CDN or local storage URL
+          <img src={imageUrl} alt="" className="h-24 w-20 shrink-0 rounded-xl object-cover ring-1 ring-black/5" />
+        ) : (
+          <div className="h-24 w-20 shrink-0 rounded-xl bg-muted" />
+        )}
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="font-medium leading-snug">{product.name}</p>
+          <p className="text-xs text-muted-foreground">
+            Size {size ? `${SIZE_LABEL[size]} (${size})` : "not chosen"} · {quantity} {quantity === 1 ? "piece" : "pieces"}
+          </p>
+          <p className="text-xs text-muted-foreground">{formatMoney(product.price, product.currency)} each</p>
+          <p className="pt-1 font-semibold tabular">{formatMoney(product.price * quantity, product.currency)}</p>
+        </div>
+      </div>
+      <p className="px-4 pt-4 text-xs font-medium tracking-[0.2em] text-muted-foreground uppercase">Delivery details</p>
+      <div className="flex-1 space-y-4 px-4 pt-3 pb-4">
         {field("customerName", "Full name", { autoComplete: "name" })}
         <div className="grid gap-4 sm:grid-cols-2">
           {field("phone", "Phone number", { type: "tel", inputMode: "tel", autoComplete: "tel", placeholder: "03001234567" })}
@@ -274,8 +292,22 @@ function OrderForm({
         <input type="text" tabIndex={-1} autoComplete="off" aria-hidden className="absolute -left-[9999px] h-0 w-0 opacity-0" {...form.register("website")} />
         {error && <p className="rounded-lg bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</p>}
       </div>
-      <div className="border-t p-4">
-        <Button type="submit" size="lg" className="w-full rounded-xl" disabled={isSubmitting || !size}>
+      <div className="sticky bottom-0 space-y-3 border-t bg-popover p-4">
+        <div className="space-y-1.5 text-sm">
+          <div className="flex justify-between text-muted-foreground">
+            <span>Subtotal</span>
+            <span className="tabular">{formatMoney(product.price * quantity, product.currency)}</span>
+          </div>
+          <div className="flex justify-between text-muted-foreground">
+            <span>Delivery</span>
+            <span>Confirmed on call</span>
+          </div>
+          <div className="flex justify-between text-base font-semibold">
+            <span>Total</span>
+            <span className="tabular">{formatMoney(product.price * quantity, product.currency)}</span>
+          </div>
+        </div>
+        <Button type="submit" size="lg" className="h-12 w-full rounded-xl text-base" disabled={isSubmitting || !size}>
           {isSubmitting && <Loader2 className="animate-spin" />} Place order
         </Button>
         <p className="mt-2 text-center text-xs text-muted-foreground">We will call or WhatsApp you to confirm before dispatch.</p>
@@ -301,7 +333,7 @@ function Confirmation({ placed, currency, onClose }: { placed: Placed; currency:
         <Row k="Total" v={<span className="font-semibold">{formatMoney(placed.totalMinor, currency)}</span>} />
       </div>
       <div className="flex gap-2">
-        <Button asChild variant="outline" className="rounded-xl">
+        <Button asChild className="rounded-xl">
           <a href="/account">Track in my orders</a>
         </Button>
         <Button variant="outline" onClick={onClose} className="rounded-xl">
