@@ -145,3 +145,18 @@
 @layer utilities {
   .tabular { font-variant-numeric: tabular-nums; }
 }
+
+/* Login lookbook: columns of shop photos drifting slowly up or down. */
+@keyframes lookbook-up {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+@keyframes lookbook-down {
+  from { transform: translateY(-50%); }
+  to { transform: translateY(0); }
+}
+.lookbook-up { animation: lookbook-up 60s linear infinite; }
+.lookbook-down { animation: lookbook-down 70s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .lookbook-up, .lookbook-down { animation: none; }
+}

@@ -1,7 +1,12 @@
+import { ArrowUpRight, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { safeNextPath } from "@/lib/safe-next";
 import { getCurrentUser } from "@/server/auth/current";
+import { LogoMark } from "@/server/brand/logo";
+import { db } from "@/server/db";
+import { listShop, shopFiltersSchema } from "@/server/public-products";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -10,34 +15,102 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   if (await getCurrentUser()) redirect("/dashboard");
   const { next } = await searchParams;
   const safeNext = safeNextPath(next);
+  // Only customer-safe, approved shop photos: the same ones anyone sees in the shop.
+  const shop = await listShop(db, shopFiltersSchema.parse({})).catch(() => null);
+  const photos = (shop?.items ?? []).map((i) => i.imageUrl).filter((u): u is string => !!u).slice(0, 15);
+  const brand = shop?.brand ?? "Threadline";
 
   return (
-    <main className="grid min-h-svh lg:grid-cols-[1.1fr_1fr]">
-      <section className="relative hidden overflow-hidden bg-primary text-primary-foreground lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <div className="flex items-center gap-2 text-sm font-medium tracking-wide">
-          <span className="grid size-8 place-items-center rounded-lg bg-brand text-brand-foreground font-display text-lg">T</span>
-          Threadline
+    <main className="grid min-h-svh bg-background lg:grid-cols-[1.1fr_1fr]">
+      <section className="relative hidden overflow-hidden bg-[#1c1612] text-[#f8f4ee] lg:flex lg:flex-col lg:justify-between lg:p-12">
+        {photos.length >= 3 && <Lookbook photos={photos} />}
+        {/* Readable text over the photos */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#1c1612] via-[#1c1612]/85 to-[#1c1612]/20" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-32 -left-24 size-[28rem] rounded-full bg-[#b4532a]/25 blur-3xl" />
+
+        <div className="relative flex items-center gap-3">
+          <LogoMark size={44} />
+          <span className="font-display text-xl tracking-wide">{brand}</span>
         </div>
-        <div className="max-w-md space-y-4">
-          <p className="font-display text-4xl leading-tight">
-            Every piece, every size, every order — in one calm place.
-          </p>
-          <p className="text-sm text-primary-foreground/70">
-            Inventory, AI product photography and customer orders for your clothing business.
-          </p>
+
+        <div className="relative max-w-md space-y-6">
+          <Stitch />
+          <h2 className="font-display text-5xl leading-[1.05] tracking-tight">
+            Every piece, every size, <span className="text-[#e08a5f] italic">every order</span> — in one calm place.
+          </h2>
+          <p className="max-w-sm text-base text-[#f8f4ee]/70">Stock, photos, shop sales and customer orders for your clothing business, all in one workspace.</p>
+          <ul className="flex flex-wrap gap-2 text-xs text-[#f8f4ee]/80">
+            {["Inventory by size", "Shop & website sales", "Photo studio", "Live dashboard"].map((t) => (
+              <li key={t} className="rounded-full border border-[#f8f4ee]/15 bg-[#f8f4ee]/5 px-3 py-1 backdrop-blur">
+                {t}
+              </li>
+            ))}
+          </ul>
         </div>
-        <div className="pointer-events-none absolute -right-24 -bottom-24 size-96 rounded-full bg-brand/25 blur-3xl" />
-        <p className="text-xs text-primary-foreground/50">Private workspace · 4 accounts</p>
+
+        <div className="relative flex items-center justify-between text-xs text-[#f8f4ee]/55">
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck className="size-3.5" /> Private workspace · team accounts only
+          </span>
+          <Link href="/shop" className="inline-flex items-center gap-1 hover:text-[#f8f4ee]">
+            Visit the shop <ArrowUpRight className="size-3.5" />
+          </Link>
+        </div>
       </section>
-      <section className="flex items-center justify-center p-6 sm:p-12">
-        <div className="w-full max-w-sm space-y-8">
-          <div className="space-y-2">
-            <h1 className="font-display text-3xl">Welcome back</h1>
-            <p className="text-sm text-muted-foreground">Sign in with the account your admin created for you.</p>
+
+      <section className="relative flex items-center justify-center p-6 sm:p-12">
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_10%,color-mix(in_oklab,var(--brand)_10%,transparent),transparent_45%)]" />
+        <div className="relative w-full max-w-sm space-y-8">
+          <div className="space-y-5">
+            <div className="flex items-center gap-3 lg:hidden">
+              <LogoMark size={40} />
+              <span className="font-display text-xl">{brand}</span>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-medium tracking-[0.2em] text-brand uppercase">Team sign in</p>
+              <h1 className="font-display text-4xl tracking-tight">Welcome back</h1>
+              <p className="text-sm text-muted-foreground">Sign in with the account your admin created for you.</p>
+            </div>
           </div>
           <LoginForm next={safeNext} />
+          <p className="border-t pt-5 text-center text-sm text-muted-foreground">
+            Shopping with us?{" "}
+            <Link href="/account/login" className="font-medium text-foreground underline-offset-4 hover:underline">
+              Customer sign in
+            </Link>
+          </p>
         </div>
       </section>
     </main>
+  );
+}
+
+/** Three slowly drifting columns of real shop photos, tilted like a lookbook wall. */
+function Lookbook({ photos }: { photos: string[] }) {
+  const cols = [0, 1, 2].map((c) => photos.filter((_, i) => i % 3 === c));
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-y-[-20%] right-[-6%] flex w-[62%] rotate-[-8deg] gap-4 opacity-70">
+      {cols.map((col, c) => (
+        <div key={c} className="flex-1 overflow-hidden">
+          {/* Doubled so the loop is seamless */}
+          <div className={`flex flex-col gap-4 ${c % 2 ? "lookbook-down" : "lookbook-up"}`}>
+            {[...col, ...col].map((src, i) => (
+              // eslint-disable-next-line @next/next/no-img-element -- CDN or local storage URL
+              <img key={i} src={src} alt="" loading="lazy" className="aspect-[4/5] w-full rounded-2xl object-cover shadow-2xl ring-1 ring-white/10" />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A stitched line with a needle eye: the logo's thread, as a small accent. */
+function Stitch() {
+  return (
+    <svg aria-hidden width="140" height="14" viewBox="0 0 140 14" className="text-[#e08a5f]">
+      <path d="M2 7 H120" stroke="currentColor" strokeWidth="2" strokeDasharray="7 6" strokeLinecap="round" />
+      <ellipse cx="130" cy="7" rx="7" ry="3.5" fill="none" stroke="currentColor" strokeWidth="2" />
+    </svg>
   );
 }
