@@ -5,6 +5,7 @@ import type { Database } from "./db";
 import { productImages, products } from "./db/schema";
 import { AppError } from "./errors";
 import { deleteStoredImage, inspectImage, storeDerivatives, storeImage, type StoredImage } from "./images";
+import { photoLogo } from "./settings";
 
 export const MAX_PHOTOS_PER_PRODUCT = 12;
 
@@ -30,14 +31,15 @@ export async function addProductPhoto(
     throw new AppError(`A product can have up to ${MAX_PHOTOS_PER_PRODUCT} extra photos. Delete one first.`, "VALIDATION", { image: ["Too many photos"] });
   }
 
+  const logo = await photoLogo(db);
   let stored: StoredImage;
   if (Buffer.isBuffer(image)) {
-    stored = await storeImage(`products/${randomUUID()}/photos`, image);
+    stored = await storeImage(`products/${randomUUID()}/photos`, image, { logo });
   } else {
     const [used] = await db.select({ id: productImages.id }).from(productImages).where(eq(productImages.storageKey, image.storageKey));
     if (used) throw new AppError("This photo upload was already used. Please upload the picture again.", "CONFLICT", { image: ["Upload again"] });
     const info = await inspectImage(image.data);
-    stored = { storageKey: image.storageKey, ...(await storeDerivatives(image.storageKey, image.data, true)), ...info };
+    stored = { storageKey: image.storageKey, ...(await storeDerivatives(image.storageKey, image.data, true, logo)), ...info };
   }
 
   try {

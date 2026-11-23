@@ -230,6 +230,8 @@ export const productImages = pgTable(
     jobId: uuid("job_id").references(() => aiGenerationJobs.id),
     variant: smallint("variant").notNull().default(0),
     review: imageReviewEnum("review").notNull().default("approved"),
+    // Whether the thumbnail and display copy carry the brand logo.
+    hasLogo: boolean("has_logo").notNull().default(false),
     uploadedBy: uuid("uploaded_by").references(() => users.id),
     reviewedBy: uuid("reviewed_by").references(() => users.id),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
@@ -495,6 +497,9 @@ export const settings = pgTable(
     pendingOrderExpiryHours: integer("pending_order_expiry_hours").notNull().default(72),
     autoPublishProducts: boolean("auto_publish_products").notNull().default(true),
     maxOrderQuantity: integer("max_order_quantity").notNull().default(10),
+    // The brand logo stamped on the copies customers see (originals stay clean).
+    photoLogo: boolean("photo_logo").notNull().default(true),
+    photoLogoCorner: varchar("photo_logo_corner", { length: 12 }).notNull().default("bottom-right"),
     updatedAt: updatedAt(),
   },
   (t) => [check("settings_singleton", sql`${t.id} = 1`)],

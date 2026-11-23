@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Loader2, Plus } from "lucide-react";
+import { Check, Download, Loader2, Plus, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -14,8 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { applyServerErrors } from "@/lib/form-errors";
-import { settingsSchema } from "@/server/settings-schema";
-import { changePasswordAction, saveCategoryAction, updateSettingsAction } from "./actions";
+import { LOGO_CORNERS, settingsSchema } from "@/server/settings-schema";
+import { changePasswordAction, saveCategoryAction, syncLogosAction, updateSettingsAction } from "./actions";
 
 function Section({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
@@ -144,6 +144,34 @@ export function SystemSettings({ defaults }: { defaults: SettingsValues }) {
             render={({ field }) => <Switch checked={field.value} onCheckedChange={field.onChange} />}
           />
         </label>
+        <label className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
+          <span>
+            <span className="block text-sm font-medium">Put the logo on product photos</span>
+            <span className="text-xs text-muted-foreground">On every new photo customers see: AI photos, marketing cards and photos added by hand. Originals stay clean.</span>
+          </span>
+          <Controller control={form.control} name="photoLogo" render={({ field }) => <Switch checked={field.value} onCheckedChange={field.onChange} />} />
+        </label>
+        <div className="space-y-2">
+          <Label>Logo corner</Label>
+          <Controller
+            control={form.control}
+            name="photoLogoCorner"
+            render={({ field }) => (
+              <Select value={field.value} onValueChange={field.onChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOGO_CORNERS.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c.replace("-", " ").replace(/^./, (x) => x.toUpperCase())}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
         <div className="sm:col-span-2">
           <Button type="submit" disabled={isSubmitting || !isDirty}>
             {isSubmitting && <Loader2 className="animate-spin" />} Save settings
@@ -204,6 +232,81 @@ export function CategoriesSettings({ categories }: { categories: { id: string; n
             </Badge>
           </button>
         ))}
+      </div>
+    </Section>
+  );
+}
+
+/** The generated logo: preview on light and dark, downloads, and bringing older photos in line. */
+export function LogoSettings({ brand, on, pending }: { brand: string; on: boolean; pending: number }) {
+  const router = useRouter();
+  const [progress, setProgress] = useState<{ done: number; left: number } | null>(null);
+  // The brand name in the URL busts the browser cache after a rename.
+  const src = (theme: string, download = false) => `/api/brand/logo?theme=${theme}&v=${encodeURIComponent(brand)}${download ? "&download=1" : ""}`;
+
+  const run = async (redoAll: boolean) => {
+    let done = 0;
+    let first = true;
+    for (;;) {
+      const res = await syncLogosAction({ redoAll: redoAll && first });
+      first = false;
+      if (!res.ok) {
+        toast.error(res.error);
+        break;
+      }
+      done += res.data.done;
+      setProgress({ done, left: res.data.left });
+      if (!res.data.left || !res.data.done) break;
+    }
+    setProgress(null);
+    toast.success(`${done} photo${done === 1 ? "" : "s"} updated`);
+    router.refresh();
+  };
+
+  return (
+    <Section title="Logo" description="Made from your brand name. It is stamped in the chosen corner of the photos customers see.">
+      <div className="grid gap-4 sm:grid-cols-2">
+        {(["light", "dark"] as const).map((t) => (
+          <div key={t} className={`grid h-32 place-items-center rounded-lg border ${t === "dark" ? "bg-[#231d18]" : "bg-[#f8f4ee]"}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- generated PNG */}
+            <img src={src(t)} alt={`${brand} logo on ${t}`} className="h-16 w-auto" />
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button asChild variant="outline" size="sm">
+          <a href={src("light", true)}>
+            <Download /> Logo for light backgrounds
+          </a>
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <a href={src("dark", true)}>
+            <Download /> Logo for dark backgrounds
+          </a>
+        </Button>
+      </div>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+        <p className="text-sm">
+          {progress
+            ? `Updating photos… ${progress.done} done, ${progress.left} left`
+            : pending
+              ? `${pending} existing photo${pending === 1 ? "" : "s"} ${on ? "do not have the logo yet" : "still show the logo"}.`
+              : on
+                ? "Every customer photo has the logo."
+                : "No customer photo shows the logo."}
+        </p>
+        <div className="flex gap-2">
+          {pending > 0 && (
+            <Button size="sm" disabled={!!progress} onClick={() => run(false)}>
+              {progress ? <Loader2 className="animate-spin" /> : <RefreshCw />} {on ? "Add logo to them" : "Remove it"}
+            </Button>
+          )}
+          {on && (
+            <Button size="sm" variant="ghost" disabled={!!progress} onClick={() => run(true)} title="After changing the brand name or corner">
+              Redo all photos
+            </Button>
+          )}
+        </div>
       </div>
     </Section>
   );

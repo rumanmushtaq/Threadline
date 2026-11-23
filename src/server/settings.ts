@@ -4,6 +4,8 @@ import { logActivity } from "./activity";
 import type { Database, Executor } from "./db";
 import { categories, settings } from "./db/schema";
 import { settingsSchema } from "./settings-schema";
+import type { LogoCorner } from "./brand/logo";
+import type { LogoStamp } from "./images";
 
 export type AppSettings = typeof settings.$inferSelect;
 
@@ -15,6 +17,12 @@ export async function getSettings(db: Executor): Promise<AppSettings> {
 }
 
 export { settingsSchema };
+
+/** What to stamp on new customer photos, from the settings (null when the logo is turned off). */
+export async function photoLogo(db: Executor): Promise<LogoStamp | null> {
+  const s = await getSettings(db);
+  return s.photoLogo ? { brand: s.brandName, corner: s.photoLogoCorner as LogoCorner } : null;
+}
 
 export async function updateSettings(db: Database, actorId: string, input: z.infer<typeof settingsSchema>) {
   await db.transaction(async (tx) => {

@@ -25,6 +25,7 @@ const LABELS: Record<string, string> = {
   "photo.approved": "approved a product photo",
   "photo.hidden": "hid a product photo",
   "photo.deleted": "deleted a product photo",
+  "photo.logo_updated": "updated the logo on product photos",
   "sale.recorded": "recorded a shop sale",
   "sale.cancelled": "cancelled a shop sale",
   "order.received": "placed an order",

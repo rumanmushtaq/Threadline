@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
+import { LogoMark } from "../brand/logo";
 
 export type CardInfo = {
   name: string;
@@ -12,6 +13,8 @@ export type CardInfo = {
   category: string | null;
   brand: string;
   tagline: string | null;
+  /** Show the logo mark next to the brand name. */
+  logo?: boolean;
 };
 
 export const CARD = { width: 1080, height: 1350 };
@@ -87,6 +90,8 @@ function PanelLayout({ src, info }: { src: string; info: CardInfo }) {
             left: 40,
             padding: "12px 22px",
             borderRadius: 999,
+            alignItems: "center",
+            gap: 14,
             background: "rgba(248,244,238,0.92)",
             color: INK,
             fontSize: 24,
@@ -95,6 +100,7 @@ function PanelLayout({ src, info }: { src: string; info: CardInfo }) {
             textTransform: "uppercase",
           }}
         >
+          {info.logo ? <LogoMark size={44} ring={false} /> : null}
           {info.brand}
         </div>
       </div>
@@ -136,7 +142,10 @@ function OverlayLayout({ src, info }: { src: string; info: CardInfo }) {
       />
       <div style={{ display: "flex", position: "absolute", top: 48, left: 48, right: 48, justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", fontSize: 30, fontWeight: 700, letterSpacing: 6, textTransform: "uppercase", textShadow: "0 2px 12px rgba(0,0,0,0.35)" }}>{info.brand}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 30, fontWeight: 700, letterSpacing: 6, textTransform: "uppercase", textShadow: "0 2px 12px rgba(0,0,0,0.35)" }}>
+            {info.logo ? <LogoMark size={56} /> : null}
+            {info.brand}
+          </div>
           {info.tagline ? <div style={{ display: "flex", fontSize: 20, opacity: 0.85, textShadow: "0 2px 12px rgba(0,0,0,0.35)" }}>{info.tagline}</div> : null}
         </div>
         <div style={{ display: "flex", padding: "16px 28px", borderRadius: 999, background: CLAY, fontSize: 44, fontWeight: 700 }}>{info.price}</div>

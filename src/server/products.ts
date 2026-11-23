@@ -20,7 +20,7 @@ import {
 import { AppError, pgCode, pgConstraint } from "./errors";
 import { deleteStoredImage, inspectImage, storeDerivatives, storeImage, type StoredImage } from "./images";
 import { applyStockChange } from "./inventory";
-import { getSettings } from "./settings";
+import { getSettings, photoLogo } from "./settings";
 import { fileUrl } from "./storage";
 
 export type CreatedProduct = { id: string; sku: string; slug: string; jobId: string | null };
@@ -38,11 +38,12 @@ export async function createProduct(
   meta: { ip?: string | null } = {},
 ): Promise<CreatedProduct> {
   const productId = randomUUID();
+  const logo = await photoLogo(db);
   let stored: StoredImage;
   if (Buffer.isBuffer(image)) {
     await inspectImage(image);
     // Storage folders use their own random id so public image URLs never reveal database ids.
-    stored = await storeImage(`products/${randomUUID()}/original`, image);
+    stored = await storeImage(`products/${randomUUID()}/original`, image, { logo });
   } else {
     // Already uploaded straight to storage by the browser; add thumbnail and display copy.
     // A ticket can only be used once: replaying it must never touch another product's photo.
@@ -50,7 +51,7 @@ export async function createProduct(
       throw new AppError("This photo upload was already used. Please upload the picture again.", "CONFLICT", { image: ["Upload again"] });
     }
     const info = await inspectImage(image.data);
-    const d = await storeDerivatives(image.storageKey, image.data, true);
+    const d = await storeDerivatives(image.storageKey, image.data, true, logo);
     stored = { storageKey: image.storageKey, ...d, ...info };
   }
 

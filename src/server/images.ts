@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { IMAGE_MAX_BYTES } from "@/lib/validation/product";
 import { AppError } from "./errors";
 import { storage } from "./storage";
+import { withLogo, type LogoCorner } from "./brand/logo";
 
 const FORMATS = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp" } as const;
 const EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" } as const;
@@ -37,6 +38,7 @@ export type StoredImage = {
   storageKey: string;
   thumbKey: string;
   displayKey: string | null;
+  hasLogo: boolean;
   contentType: string;
   width: number;
   height: number;
@@ -48,18 +50,20 @@ export type StoredImage = {
  * Each copy gets its own random name: knowing a public display URL must never let
  * anyone work out the original's URL.
  */
-export async function storeDerivatives(storageKey: string, buf: Buffer, withDisplay: boolean) {
+export async function storeDerivatives(storageKey: string, buf: Buffer, withDisplay: boolean, logo?: LogoStamp | null) {
   const folder = storageKey.split("/").slice(0, 2).join("/");
   const thumbKey = `${folder}/derived/${randomUUID()}.webp`;
   const displayKey = withDisplay ? `${folder}/derived/${randomUUID()}.webp` : null;
   const s = storage();
   const written: string[] = [];
   try {
-    const thumb = await sharp(buf).rotate().resize({ width: THUMB_WIDTH, withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
+    const thumb = await stamped(await sharp(buf).rotate().resize({ width: THUMB_WIDTH, withoutEnlargement: true }).png().toBuffer(), logo)
+      .then((b) => sharp(b).webp({ quality: 80 }).toBuffer());
     await s.put(thumbKey, thumb, "image/webp");
     written.push(thumbKey);
     if (displayKey) {
-      const display = await sharp(buf).rotate().resize({ width: DISPLAY_WIDTH, withoutEnlargement: true }).webp({ quality: 86 }).toBuffer();
+      const display = await stamped(await sharp(buf).rotate().resize({ width: DISPLAY_WIDTH, withoutEnlargement: true }).png().toBuffer(), logo)
+        .then((b) => sharp(b).webp({ quality: 86 }).toBuffer());
       await s.put(displayKey, display, "image/webp");
       written.push(displayKey);
     }
@@ -67,7 +71,14 @@ export async function storeDerivatives(storageKey: string, buf: Buffer, withDisp
     await Promise.allSettled(written.map((k) => s.delete(k)));
     throw err;
   }
-  return { thumbKey, displayKey };
+  return { thumbKey, displayKey, hasLogo: !!logo };
+}
+
+/** Brand logo for the copies customers see; null means no logo. */
+export type LogoStamp = { brand: string; corner: LogoCorner };
+
+async function stamped(img: Buffer, logo?: LogoStamp | null) {
+  return logo ? withLogo(img, logo) : img;
 }
 
 /**
@@ -77,7 +88,7 @@ export async function storeDerivatives(storageKey: string, buf: Buffer, withDisp
 export async function storeImage(
   prefix: string,
   buf: Buffer,
-  opts: { contentType?: string; display?: boolean } = {},
+  opts: { contentType?: string; display?: boolean; logo?: LogoStamp | null } = {},
 ): Promise<StoredImage> {
   const info = opts.contentType
     ? { ...(await sharp(buf).metadata()), contentType: opts.contentType }
@@ -86,7 +97,7 @@ export async function storeImage(
   const s = storage();
   await s.put(storageKey, buf, info.contentType);
   try {
-    const d = await storeDerivatives(storageKey, buf, opts.display ?? true);
+    const d = await storeDerivatives(storageKey, buf, opts.display ?? true, opts.logo);
     return { storageKey, ...d, contentType: info.contentType, width: info.width!, height: info.height! };
   } catch (err) {
     await s.delete(storageKey).catch(() => {});

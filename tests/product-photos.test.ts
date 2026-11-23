@@ -108,3 +108,43 @@ describe("public site address", () => {
     expect(appUrl()).toBe("http://localhost:3200");
   });
 });
+
+describe("logo on customer photos", () => {
+  it("stamps new photos when on, keeps the original clean, and brings old photos in line", async () => {
+    const { settings } = await import("@/server/db/schema");
+    const { photosNeedingLogoUpdate, syncPhotoLogos } = await import("@/server/storage-maintenance");
+    const { storage } = await import("@/server/storage");
+    const sharp = (await import("sharp")).default;
+
+    const p = await createProduct(db, ids.staffId, productInput(), await testImage("#ffffff"));
+    const [first] = await db.select().from(productImages).where(eq(productImages.productId, p.id));
+    expect(first.hasLogo).toBe(true);
+    // The logo sits in the bottom-right corner of the display copy; the original is untouched.
+    const corner = async (key: string) => {
+      const img = sharp(await storage().get(key));
+      const { width, height } = await img.metadata();
+      const { data } = await img.extract({ left: Math.round(width! * 0.75), top: Math.round(height! * 0.9), width: Math.round(width! * 0.2), height: Math.round(height! * 0.05) }).raw().toBuffer({ resolveWithObject: true });
+      return data.reduce((a, b) => a + b, 0) / data.length;
+    };
+    expect(await corner(first.displayKey!)).toBeLessThan(200); // darkened by the logo pill
+    expect(await corner(first.storageKey)).toBeGreaterThan(250); // still plain white
+
+    // Turned off: the existing photo now needs updating, and the sync removes the logo.
+    await db.update(settings).set({ photoLogo: false });
+    expect(await photosNeedingLogoUpdate(db)).toBe(1);
+    const res = await syncPhotoLogos(db, { actorId: ids.adminId });
+    expect(res).toEqual({ done: 1, left: 0 });
+    const [after] = await db.select().from(productImages).where(eq(productImages.id, first.id));
+    expect(after.hasLogo).toBe(false);
+    expect(after.displayKey).not.toBe(first.displayKey);
+    expect(await corner(after.displayKey!)).toBeGreaterThan(250);
+    await expect(storage().get(first.displayKey!)).rejects.toThrow(); // old copy removed
+
+    // New photos follow the setting, and "redo all" remakes matching ones too.
+    const photo = await addProductPhoto(db, ids.adminId, p.id, await testImage(), { approveNow: true });
+    expect((await db.select().from(productImages).where(eq(productImages.id, photo.id)))[0].hasLogo).toBe(false);
+    await db.update(settings).set({ photoLogo: true, photoLogoCorner: "top-left" });
+    expect((await syncPhotoLogos(db, { redoAll: true })).left).toBe(0);
+    expect((await db.select().from(productImages).where(eq(productImages.productId, p.id))).every((r) => r.hasLogo)).toBe(true);
+  });
+});

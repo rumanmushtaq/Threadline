@@ -85,6 +85,13 @@
       "when": 1795366365606,
       "tag": "0011_photo_review",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795456716160,
+      "tag": "0012_photo_logo",
+      "breakpoints": true
     }
   ]
 }

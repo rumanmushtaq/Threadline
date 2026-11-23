@@ -5,7 +5,8 @@ import { AUDIENCE_LABEL, sortSizes } from "@/lib/sizes";
 import { logActivity } from "../activity";
 import { db as defaultDb, type Database } from "../db";
 import { aiGenerationJobs, categories, productImages, products, productSizes } from "../db/schema";
-import { deleteStoredImage, storeImage, type StoredImage } from "../images";
+import type { LogoCorner } from "../brand/logo";
+import { deleteStoredImage, storeImage, type LogoStamp, type StoredImage } from "../images";
 import { notifyUser } from "../notifications";
 import { getSettings } from "../settings";
 import { storage } from "../storage";
@@ -87,6 +88,7 @@ async function processJob(db: Database, job: Job) {
     storage().get(original.storageKey),
   ]);
 
+  const logo: LogoStamp | null = settings.photoLogo ? { brand: settings.brandName, corner: settings.photoLogoCorner as LogoCorner } : null;
   // Keep generated files in the same (non-identifying) folder as the original.
   const folder = original.storageKey.split("/").slice(0, 2).join("/");
   const count = aiVariations();
@@ -109,13 +111,14 @@ async function processJob(db: Database, job: Job) {
     category: product.category,
     brand: settings.brandName,
     tagline: settings.brandTagline,
+    logo: settings.photoLogo,
   };
 
   const stored: StoredImage[] = [];
   try {
     const rows: (typeof productImages.$inferInsert)[] = [];
     for (const [i, img] of generated.entries()) {
-      const photo = await storeImage(`${folder}/ai`, img.data, { contentType: img.contentType });
+      const photo = await storeImage(`${folder}/ai`, img.data, { contentType: img.contentType, logo });
       stored.push(photo);
       rows.push({ productId: product.id, kind: "ai_model", jobId: job.id, variant: i, ...photo });
 

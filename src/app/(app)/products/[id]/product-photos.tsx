@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { IMAGE_TYPES } from "@/lib/validation/product";
-import { addPhotoAction, deletePhotoAction, preparePhotoUploadAction, reviewPhotoAction } from "./photo-actions";
+import { deletePhotoAction, reviewPhotoAction } from "./photo-actions";
+import { uploadPhoto } from "./upload-photo";
 
 export type PhotoItem = {
   id: string;
@@ -25,29 +26,6 @@ const REVIEW = {
   pending: { label: "Waiting for check", cls: "bg-warning/20 text-foreground" },
   hidden: { label: "Hidden", cls: "bg-muted text-muted-foreground" },
 } as const;
-
-/** Upload one file: straight to Cloudinary when it is set up, else through the server. */
-async function uploadOne(productId: string, file: File, approveNow: boolean) {
-  const fd = new FormData();
-  fd.set("productId", productId);
-  fd.set("approveNow", String(approveNow));
-  const ticket = await preparePhotoUploadAction();
-  if (!ticket.ok) return ticket;
-  if (ticket.data.mode === "cloudinary") {
-    const up = new FormData();
-    for (const [k, v] of Object.entries(ticket.data.fields)) up.set(k, v);
-    up.set("file", file);
-    const r = await fetch(ticket.data.uploadUrl, { method: "POST", body: up }).catch(() => null);
-    const body = (await r?.json().catch(() => null)) as { public_id?: string; format?: string; error?: { message?: string } } | null;
-    if (!r?.ok || !body?.public_id || !body.format) {
-      return { ok: false as const, error: body?.error?.message ?? "The photo could not be uploaded. Check your connection and try again." };
-    }
-    fd.set("upload", JSON.stringify({ publicId: body.public_id, format: body.format, expires: ticket.data.expires, token: ticket.data.token }));
-  } else {
-    fd.set("image", file);
-  }
-  return addPhotoAction(fd);
-}
 
 /** Add photos by hand and decide which ones customers see. */
 export function ProductPhotos({ productId, photos, archived }: { productId: string; photos: PhotoItem[]; archived: boolean }) {
@@ -72,7 +50,7 @@ export function ProductPhotos({ productId, photos, archived }: { productId: stri
     setUploading({ done: 0, total: good.length });
     let added = 0;
     for (const [i, file] of good.entries()) {
-      const res = await uploadOne(productId, file, canReview && approveNow);
+      const res = await uploadPhoto(productId, file, canReview && approveNow);
       if (res.ok) added++;
       else toast.error(`${file.name}: ${res.error}`);
       setUploading({ done: i + 1, total: good.length });
@@ -98,7 +76,7 @@ export function ProductPhotos({ productId, photos, archived }: { productId: stri
   };
 
   return (
-    <section className="rounded-xl border bg-card">
+    <section id="photos" className="scroll-mt-20 rounded-xl border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
         <div>
           <h2 className="font-medium">Photos</h2>

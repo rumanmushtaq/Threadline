@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { parseOrThrow, runAction } from "@/server/action";
 import { getCurrentUser, requestMeta, requirePermission } from "@/server/auth/current";
 import { db } from "@/server/db";
 import { AppError, pgCode } from "@/server/errors";
+import { syncPhotoLogos } from "@/server/storage-maintenance";
 import { supabaseServer } from "@/server/supabase/next";
 import { categorySchema, saveCategory, settingsSchema, updateSettings } from "@/server/settings";
 import { changeOwnPassword, changeOwnPasswordSchema } from "@/server/users";
@@ -39,5 +41,16 @@ export async function saveCategoryAction(input: unknown) {
     }
     revalidatePath("/settings");
     return null;
+  });
+}
+
+export async function syncLogosAction(input: unknown) {
+  return runAction(async () => {
+    const user = await requirePermission("settings.manage");
+    const { redoAll } = parseOrThrow(z.object({ redoAll: z.boolean().default(false) }), input);
+    const res = await syncPhotoLogos(db, { batch: 6, redoAll, actorId: user.id });
+    revalidatePath("/shop");
+    revalidatePath("/products");
+    return res;
   });
 }

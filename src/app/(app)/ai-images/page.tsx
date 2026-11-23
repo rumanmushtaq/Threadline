@@ -9,8 +9,12 @@ import { defaultProviderName, PROVIDER_LABEL, PROVIDER_NAMES, providerConfigured
 import { listJobs, type JobStatus } from "@/server/ai/queries";
 import { requirePageUser } from "@/server/auth/current";
 import { can } from "@/server/auth/permissions";
+import { asc, eq } from "drizzle-orm";
 import { db } from "@/server/db";
+import { products as productsTable } from "@/server/db/schema";
+import { getSettings } from "@/server/settings";
 import { AutoRefresh, JobRetryButton, StatusTabs } from "./job-controls";
+import { ManualPhotos } from "./manual-photos";
 
 export const metadata: Metadata = { title: "AI product images" };
 
@@ -26,7 +30,11 @@ export default async function AiImagesPage({ searchParams }: { searchParams: Pro
   const user = await requirePageUser("ai.view");
   const raw = (await searchParams).status;
   const status = STATUSES.includes(raw as JobStatus) ? (raw as JobStatus) : undefined;
-  const { counts, rows } = await listJobs(db, status);
+  const [{ counts, rows }, products, settings] = await Promise.all([
+    listJobs(db, status),
+    db.select({ id: productsTable.id, sku: productsTable.sku, name: productsTable.name }).from(productsTable).where(eq(productsTable.status, "active")).orderBy(asc(productsTable.name)),
+    getSettings(db),
+  ]);
   const active = (counts.pending ?? 0) + (counts.processing ?? 0);
   const provider = defaultProviderName();
   const configured = (PROVIDER_NAMES as readonly string[]).includes(provider) && providerConfigured(provider as ProviderName);
@@ -35,7 +43,8 @@ export default async function AiImagesPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader
         title="AI product images"
-        description="Generation jobs run in the background with automatic retries. Text on marketing cards is drawn by a fixed template, never by the AI."
+        description="Generation jobs run in the background with automatic retries. Text on marketing cards is drawn by a fixed template, never by the AI. No AI yet? Add your own photos by hand."
+        actions={<ManualPhotos products={products} logoOn={settings.photoLogo} />}
       />
       {active > 0 && <AutoRefresh />}
       {!configured && (
@@ -116,9 +125,16 @@ export default async function AiImagesPage({ searchParams }: { searchParams: Pro
                     )}
                   </TableCell>
                   <TableCell className="pr-4 text-right">
-                    {can(user.role, "ai.regenerate") && (j.status === "failed" || j.status === "completed") && (
-                      <JobRetryButton productId={j.productId} label={j.status === "failed" ? "Retry" : "Regenerate"} />
-                    )}
+                    <div className="flex items-center justify-end gap-1">
+                      {j.status === "failed" && can(user.role, "photo.upload") && (
+                        <Link href={`/products/${j.productId}#photos`} className="rounded-md px-2 py-1 text-xs whitespace-nowrap text-muted-foreground hover:bg-muted hover:text-foreground">
+                          Upload instead
+                        </Link>
+                      )}
+                      {can(user.role, "ai.regenerate") && (j.status === "failed" || j.status === "completed") && (
+                        <JobRetryButton productId={j.productId} label={j.status === "failed" ? "Retry" : "Regenerate"} />
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
