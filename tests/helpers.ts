@@ -8,6 +8,7 @@ export const testDb = createDb(process.env.TEST_DATABASE_URL!);
 export const db = testDb.db;
 
 const TABLES = [
+  "expenses",
   "shop_sales",
   "stock_reservations",
   "order_items",
@@ -38,6 +39,7 @@ export async function resetDb() {
     await tx.execute(sql`ALTER SEQUENCE product_sku_seq RESTART WITH 1`);
     await tx.execute(sql`ALTER SEQUENCE order_number_seq RESTART WITH 1`);
     await tx.execute(sql`ALTER SEQUENCE shop_sale_number_seq RESTART WITH 1`);
+    await tx.execute(sql`ALTER SEQUENCE expense_number_seq RESTART WITH 1`);
     await tx.execute(sql`DELETE FROM settings`);
     await tx.execute(sql`INSERT INTO settings (id) VALUES (1)`);
   });

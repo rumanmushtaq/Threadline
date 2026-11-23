@@ -13,7 +13,7 @@ export default async function SignUpPage({ searchParams }: { searchParams: Promi
   const next = safeNextPath((await searchParams).next, "/shop");
   if (await getCurrentCustomer()) redirect(next);
   return (
-    <AccountShell title="Create an account" description="One account to order, save your delivery address and follow your orders.">
+    <AccountShell tab="signup" next={next} title="Create an account" description="One account to order, save your delivery address and follow your orders.">
       <GoogleButton next={next} />
       <OrDivider />
       <SignUpForm next={next} />

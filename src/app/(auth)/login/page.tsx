@@ -8,6 +8,7 @@ import { LogoMark } from "@/server/brand/logo";
 import { db } from "@/server/db";
 import { listShop, shopFiltersSchema } from "@/server/public-products";
 import { LoginForm } from "./login-form";
+import { Lookbook } from "@/components/shop/lookbook";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -23,7 +24,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <main className="grid min-h-svh bg-background lg:grid-cols-[1.1fr_1fr]">
       <section className="relative hidden overflow-hidden bg-[#1c1612] text-[#f8f4ee] lg:flex lg:flex-col lg:justify-between lg:p-12">
-        {photos.length >= 3 && <Lookbook photos={photos} />}
+        {photos.length >= 3 && <Lookbook photos={photos} className="inset-y-[-20%] right-[-6%] w-[62%] opacity-70" />}
         {/* Readable text over the photos */}
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#1c1612] via-[#1c1612]/85 to-[#1c1612]/20" />
         <div aria-hidden className="pointer-events-none absolute -bottom-32 -left-24 size-[28rem] rounded-full bg-[#b4532a]/25 blur-3xl" />
@@ -82,26 +83,6 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </div>
       </section>
     </main>
-  );
-}
-
-/** Three slowly drifting columns of real shop photos, tilted like a lookbook wall. */
-function Lookbook({ photos }: { photos: string[] }) {
-  const cols = [0, 1, 2].map((c) => photos.filter((_, i) => i % 3 === c));
-  return (
-    <div aria-hidden className="pointer-events-none absolute inset-y-[-20%] right-[-6%] flex w-[62%] rotate-[-8deg] gap-4 opacity-70">
-      {cols.map((col, c) => (
-        <div key={c} className="flex-1 overflow-hidden">
-          {/* Doubled so the loop is seamless */}
-          <div className={`flex flex-col gap-4 ${c % 2 ? "lookbook-down" : "lookbook-up"}`}>
-            {[...col, ...col].map((src, i) => (
-              // eslint-disable-next-line @next/next/no-img-element -- CDN or local storage URL
-              <img key={i} src={src} alt="" loading="lazy" className="aspect-[4/5] w-full rounded-2xl object-cover shadow-2xl ring-1 ring-white/10" />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
 

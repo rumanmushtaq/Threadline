@@ -40,22 +40,30 @@ async function moneyInRange(db: Executor, range: ResolvedRange) {
          WHERE it.type IN ('initial', 'stock_in') AND it.created_at >= ${from} AND it.created_at < ${range.to}
       ), placed AS (
         SELECT count(*) AS orders FROM orders WHERE created_at >= ${from} AND created_at < ${range.to}
+      ), spent AS (
+        SELECT coalesce(sum(amount_minor), 0) AS expenses, count(*) AS expense_count
+          FROM expenses WHERE cancelled_at IS NULL AND spent_at >= ${from} AND spent_at < ${range.to}
       )
       SELECT web.sales AS web_sales, web.cost AS web_cost, web.pieces AS web_pieces, web.count AS web_count,
              shop.sales AS shop_sales, shop.cost AS shop_cost, shop.pieces AS shop_pieces, shop.count AS shop_count,
-             bought.purchases, bought.pieces_bought, placed.orders
-        FROM web, shop, bought, placed`)
+             bought.purchases, bought.pieces_bought, placed.orders, spent.expenses, spent.expense_count
+        FROM web, shop, bought, placed, spent`)
   ).rows;
   const shop = { sales: n(r.shop_sales), cost: n(r.shop_cost), pieces: n(r.shop_pieces), count: n(r.shop_count) };
   const website = { sales: n(r.web_sales), cost: n(r.web_cost), pieces: n(r.web_pieces), count: n(r.web_count) };
   const sales = shop.sales + website.sales;
   const costOfSold = shop.cost + website.cost;
   const purchases = n(r.purchases);
+  const expenses = n(r.expenses);
   return {
     purchases,
     sales,
     costOfSold,
     profit: sales - costOfSold,
+    expenses,
+    expenseCount: n(r.expense_count),
+    /** Profit on what sold, minus running costs. */
+    netProfit: sales - costOfSold - expenses,
     net: sales - purchases,
     piecesBought: n(r.pieces_bought),
     piecesSold: shop.pieces + website.pieces,

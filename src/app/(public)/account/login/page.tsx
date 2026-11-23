@@ -24,8 +24,10 @@ export default async function CustomerLoginPage({ searchParams }: { searchParams
   const qs = `?next=${encodeURIComponent(next)}`;
   return (
     <AccountShell
-      title="Sign in"
-      description={reason === "order" ? "Sign in or create an account to place your order. Browsing never needs an account." : "Welcome back. Sign in to order and follow your orders."}
+      tab="login"
+      next={next}
+      title="Welcome back"
+      description={reason === "order" ? "Sign in or create an account to place your order. Browsing never needs an account." : "Sign in to order and follow your orders."}
     >
       {error && ERRORS[error] && (
         <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">

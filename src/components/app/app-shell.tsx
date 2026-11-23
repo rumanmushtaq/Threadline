@@ -2,6 +2,7 @@
 
 import {
   Banknote,
+  Fuel,
   Activity,
   Boxes,
   LayoutDashboard,
@@ -18,6 +19,7 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import { LogoMark } from "@/components/brand/logo-mark";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { logoutAction } from "@/app/(auth)/actions";
@@ -60,6 +62,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   ai: Sparkles,
   links: Link2,
   sales: Banknote,
+  expenses: Fuel,
   orders: ShoppingBag,
   customers: Users,
   activity: Activity,
@@ -92,8 +95,8 @@ export function AppShell({
         <Sidebar collapsible="icon" variant="inset">
           <SidebarHeader>
             <Link href="/dashboard" className="flex items-center gap-2 px-2 py-1.5">
-              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand font-display text-lg text-brand-foreground">
-                T
+              <span className="shrink-0">
+                <LogoMark size={32} />
               </span>
               <span className="truncate font-display text-lg group-data-[collapsible=icon]:hidden">Threadline</span>
             </Link>

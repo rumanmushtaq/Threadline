@@ -26,6 +26,9 @@ const LABELS: Record<string, string> = {
   "photo.hidden": "hid a product photo",
   "photo.deleted": "deleted a product photo",
   "photo.logo_updated": "updated the logo on product photos",
+  "expense.added": "added an expense",
+  "expense.cancelled": "cancelled an expense",
+  "expense.category_added": "added an expense category",
   "sale.recorded": "recorded a shop sale",
   "sale.cancelled": "cancelled a shop sale",
   "order.received": "placed an order",
@@ -48,5 +51,5 @@ export function activityLabel(action: string) {
 export function activitySubject(metadata: Record<string, unknown> | null | undefined) {
   if (!metadata) return null;
   const m = metadata as Record<string, string | undefined>;
-  return m.orderNumber ?? m.saleNumber ?? m.sku ?? m.email ?? null;
+  return m.orderNumber ?? m.saleNumber ?? m.expenseNumber ?? m.sku ?? m.email ?? null;
 }

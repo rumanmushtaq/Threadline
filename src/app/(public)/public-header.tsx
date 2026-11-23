@@ -1,5 +1,6 @@
 import { UserRound } from "lucide-react";
 import Link from "next/link";
+import { LogoMark } from "@/components/brand/logo-mark";
 
 /** Header for customer pages: the brand leads back to the product list; sign in or your account on the right. */
 export function PublicHeader({
@@ -14,7 +15,8 @@ export function PublicHeader({
   return (
     <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <Link href="/shop" className="font-display text-xl tracking-tight">
+        <Link href="/shop" className="flex items-center gap-2.5 font-display text-xl tracking-tight">
+          <LogoMark size={30} />
           {brand}
         </Link>
         <nav className="flex items-center gap-5 text-sm">

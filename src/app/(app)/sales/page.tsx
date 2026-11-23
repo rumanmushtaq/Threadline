@@ -56,7 +56,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         }
       />
 
-      <MoneyCards m={money} currency={cur} salesHref={href} />
+      <MoneyCards m={money} currency={cur} salesHref={href} expensesHref={`/expenses?${new URLSearchParams(rangeQuery)}`} />
 
       <nav className="flex flex-wrap gap-2" aria-label="Sales channel">
         {SALE_CHANNELS.map((c) => (

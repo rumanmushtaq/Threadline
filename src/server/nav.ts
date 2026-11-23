@@ -8,6 +8,7 @@ const NAV: { key: string; href: string; label: string; permission: Permission | 
   { key: "ai", href: "/ai-images", label: "AI Product Images", permission: "ai.view", group: "main" },
   { key: "links", href: "/links", label: "Public Product Links", permission: "link.view", group: "main" },
   { key: "sales", href: "/sales", label: "Sales", permission: "sale.view", group: "sales" },
+  { key: "expenses", href: "/expenses", label: "Expenses", permission: "expense.view", group: "sales" },
   { key: "orders", href: "/orders", label: "Orders", permission: "order.view", group: "sales" },
   { key: "customers", href: "/customers", label: "Customers", permission: "customer.view", group: "sales" },
   { key: "activity", href: "/activity", label: "Activity Logs", permission: "activity.view", group: "admin" },

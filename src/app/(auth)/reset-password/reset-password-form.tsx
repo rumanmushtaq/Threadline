@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/auth/fields";
 import { Label } from "@/components/ui/label";
 import { applyServerErrors } from "@/lib/form-errors";
 import type { ActionResult } from "@/server/errors";
@@ -52,7 +52,7 @@ export function ResetPasswordForm({
       {(["password", "confirm"] as const).map((k) => (
         <div key={k} className="space-y-2">
           <Label htmlFor={`new-${k}`}>{k === "password" ? "New password" : "Confirm new password"}</Label>
-          <Input id={`new-${k}`} type="password" autoComplete="new-password" aria-invalid={!!errors[k]} {...form.register(k)} />
+          <PasswordInput id={`new-${k}`} autoComplete="new-password" aria-invalid={!!errors[k]} {...form.register(k)} />
           {errors[k] && <p className="text-xs text-destructive">{errors[k].message}</p>}
         </div>
       ))}

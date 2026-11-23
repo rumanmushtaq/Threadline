@@ -1,13 +1,13 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2 } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { IconInput, PasswordInput } from "@/components/auth/fields";
 import { Label } from "@/components/ui/label";
 import { customerLoginAction } from "../actions";
 
@@ -32,7 +32,7 @@ export function CustomerLoginForm({ next }: { next: string }) {
     <form onSubmit={onSubmit} method="post" className="space-y-5" noValidate>
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
-        <Input id="email" type="email" autoComplete="email" aria-invalid={!!errors.email} {...form.register("email")} />
+        <IconInput icon="mail" id="email" type="email" autoComplete="email" placeholder="you@example.com" aria-invalid={!!errors.email} {...form.register("email")} />
         {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
       </div>
       <div className="space-y-2">
@@ -42,7 +42,7 @@ export function CustomerLoginForm({ next }: { next: string }) {
             Forgot password?
           </Link>
         </div>
-        <Input id="password" type="password" autoComplete="current-password" aria-invalid={!!errors.password} {...form.register("password")} />
+        <PasswordInput id="password" autoComplete="current-password" placeholder="Your password" aria-invalid={!!errors.password} {...form.register("password")} />
         {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
       </div>
       {errors.root && (
@@ -50,8 +50,10 @@ export function CustomerLoginForm({ next }: { next: string }) {
           {errors.root.message}
         </p>
       )}
-      <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
-        {isSubmitting && <Loader2 className="animate-spin" />} Sign in
+      <Button type="submit" className="group h-11 w-full rounded-xl text-base" disabled={isSubmitting}>
+        {isSubmitting ? <Loader2 className="animate-spin" /> : null}
+        {isSubmitting ? "Signing in…" : "Sign in"}
+        {!isSubmitting && <ArrowRight className="transition-transform group-hover:translate-x-0.5" />}
       </Button>
     </form>
   );

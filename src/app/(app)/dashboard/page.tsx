@@ -51,8 +51,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
       {m && (
         <section className="space-y-3">
-          <SectionTitle title={`Money · ${range.label}`} note="Shop sales plus website orders delivered in these dates." />
-          <MoneyCards m={m} currency={cur} salesHref={(c) => `/sales?${salesQuery}&channel=${c}`} />
+          <SectionTitle title={`Money · ${range.label}`} note="Shop sales, delivered website orders and expenses in these dates." />
+          <MoneyCards m={m} currency={cur} salesHref={(c) => `/sales?${salesQuery}&channel=${c}`} expensesHref={`/expenses?${salesQuery}`} />
         </section>
       )}
 

@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { IconInput, PasswordInput } from "@/components/auth/fields";
 import { Label } from "@/components/ui/label";
 import { customerSignUpAction } from "../actions";
 
@@ -27,10 +27,10 @@ const schema = z
 type Values = z.input<typeof schema>;
 
 const FIELDS = [
-  { name: "name", label: "Full name", type: "text", autoComplete: "name" },
-  { name: "email", label: "Email", type: "email", autoComplete: "email" },
-  { name: "password", label: "Password", type: "password", autoComplete: "new-password" },
-  { name: "confirm", label: "Confirm password", type: "password", autoComplete: "new-password" },
+  { name: "name", label: "Full name", type: "text", autoComplete: "name", icon: "user", placeholder: "e.g. Ayesha Khan" },
+  { name: "email", label: "Email", type: "email", autoComplete: "email", icon: "mail", placeholder: "you@example.com" },
+  { name: "password", label: "Password", type: "password", autoComplete: "new-password", icon: "lock", placeholder: "10+ characters, a letter and a number" },
+  { name: "confirm", label: "Confirm password", type: "password", autoComplete: "new-password", icon: "lock", placeholder: "Type it again" },
 ] as const;
 
 export function SignUpForm({ next }: { next: string }) {
@@ -67,7 +67,11 @@ export function SignUpForm({ next }: { next: string }) {
       {FIELDS.map((f) => (
         <div key={f.name} className="space-y-2">
           <Label htmlFor={`su-${f.name}`}>{f.label}</Label>
-          <Input id={`su-${f.name}`} type={f.type} autoComplete={f.autoComplete} aria-invalid={!!errors[f.name]} {...form.register(f.name)} />
+          {f.type === "password" ? (
+            <PasswordInput id={`su-${f.name}`} autoComplete={f.autoComplete} placeholder={f.placeholder} aria-invalid={!!errors[f.name]} {...form.register(f.name)} />
+          ) : (
+            <IconInput icon={f.icon} id={`su-${f.name}`} type={f.type} autoComplete={f.autoComplete} placeholder={f.placeholder} aria-invalid={!!errors[f.name]} {...form.register(f.name)} />
+          )}
           {errors[f.name] && <p className="text-xs text-destructive">{errors[f.name]?.message}</p>}
         </div>
       ))}
@@ -76,7 +80,7 @@ export function SignUpForm({ next }: { next: string }) {
           {errors.root.message}
         </p>
       )}
-      <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+      <Button type="submit" className="h-11 w-full rounded-xl text-base" disabled={isSubmitting}>
         {isSubmitting && <Loader2 className="animate-spin" />} Create account
       </Button>
     </form>

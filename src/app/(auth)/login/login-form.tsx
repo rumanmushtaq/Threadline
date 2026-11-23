@@ -1,14 +1,14 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { IconInput, PasswordInput } from "@/components/auth/fields";
 import { Label } from "@/components/ui/label";
 import { loginAction } from "../actions";
 
@@ -20,9 +20,6 @@ const schema = z.object({
 export function LoginForm({ next }: { next: string }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [show, setShow] = useState(false);
-  const [caps, setCaps] = useState(false);
-  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => setCaps(e.getModifierState("CapsLock"));
   const form = useForm({ resolver: zodResolver(schema), defaultValues: { email: "", password: "" } });
   const { errors, isSubmitting } = form.formState;
 
@@ -39,19 +36,7 @@ export function LoginForm({ next }: { next: string }) {
     <form onSubmit={onSubmit} method="post" className="space-y-5" noValidate>
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
-        <div className="relative">
-          <Mail className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            autoFocus
-            placeholder="you@yourshop.com"
-            className="h-11 rounded-xl pl-10"
-            aria-invalid={!!errors.email}
-            {...form.register("email")}
-          />
-        </div>
+        <IconInput icon="mail" id="email" type="email" autoComplete="email" autoFocus placeholder="you@yourshop.com" aria-invalid={!!errors.email} {...form.register("email")} />
         {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
       </div>
       <div className="space-y-2">
@@ -61,31 +46,8 @@ export function LoginForm({ next }: { next: string }) {
             Forgot password?
           </Link>
         </div>
-        <div className="relative">
-          <Lock className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            id="password"
-            type={show ? "text" : "password"}
-            autoComplete="current-password"
-            placeholder="Your password"
-            className="h-11 rounded-xl pr-11 pl-10"
-            aria-invalid={!!errors.password}
-            onKeyUp={onKey}
-            onKeyDown={onKey}
-            {...form.register("password")}
-          />
-          <button
-            type="button"
-            onClick={() => setShow((v) => !v)}
-            aria-label={show ? "Hide what you typed" : "Show what you typed"}
-            aria-pressed={show}
-            className="absolute top-1/2 right-1.5 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-          </button>
-        </div>
+        <PasswordInput id="password" autoComplete="current-password" placeholder="Your password" aria-invalid={!!errors.password} {...form.register("password")} />
         {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
-        {caps && <p className="text-xs text-warning-foreground">Caps Lock is on.</p>}
       </div>
       {error && (
         <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">

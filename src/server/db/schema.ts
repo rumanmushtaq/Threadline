@@ -54,6 +54,7 @@ export const reservationPolicyEnum = pgEnum("reservation_policy", ["on_order", "
 export const productSkuSeq = pgSequence("product_sku_seq", { startWith: 1, increment: 1 });
 export const orderNumberSeq = pgSequence("order_number_seq", { startWith: 1, increment: 1 });
 export const shopSaleNumberSeq = pgSequence("shop_sale_number_seq", { startWith: 1, increment: 1 });
+export const expenseNumberSeq = pgSequence("expense_number_seq", { startWith: 1, increment: 1 });
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
@@ -440,6 +441,52 @@ export const shopSales = pgTable(
     index("shop_sales_product_idx").on(t.productId),
     check("shop_sales_quantity_positive", sql`${t.quantity} > 0`),
     check("shop_sales_amounts_nonneg", sql`${t.unitPriceMinor} >= 0 AND ${t.unitCostMinor} >= 0`),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Expenses
+// ---------------------------------------------------------------------------
+
+export const paymentMethodEnum = pgEnum("payment_method", ["cash", "bank", "jazzcash", "easypaisa", "card", "other"]);
+
+/** Kinds of running costs (fuel, rent, packaging...). The admin can add more; unused ones can be hidden. */
+export const expenseCategories = pgTable("expense_categories", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 40 }).notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: createdAt(),
+});
+
+/**
+ * Money spent to run the business that is not stock (stock is a purchase). A mistake is
+ * cancelled, never deleted, so the history stays complete.
+ */
+export const expenses = pgTable(
+  "expenses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    expenseNumber: varchar("expense_number", { length: 20 })
+      .notNull()
+      .unique()
+      .default(sql`next_code('EXP-', 'expense_number_seq')`),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => expenseCategories.id),
+    amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+    spentAt: timestamp("spent_at", { withTimezone: true }).notNull().defaultNow(),
+    paidTo: varchar("paid_to", { length: 80 }),
+    paymentMethod: paymentMethodEnum("payment_method").notNull().default("cash"),
+    note: varchar("note", { length: 200 }),
+    recordedBy: uuid("recorded_by").references(() => users.id),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancelledBy: uuid("cancelled_by").references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("expenses_spent_at_idx").on(t.spentAt),
+    index("expenses_category_idx").on(t.categoryId),
+    check("expenses_amount_positive", sql`${t.amountMinor} > 0`),
   ],
 );
 

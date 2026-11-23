@@ -92,6 +92,13 @@
       "when": 1795456716160,
       "tag": "0012_photo_logo",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795461210348,
+      "tag": "0013_expenses",
+      "breakpoints": true
     }
   ]
 }

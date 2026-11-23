@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { IconInput } from "@/components/auth/fields";
 import { Label } from "@/components/ui/label";
 import type { ActionResult } from "@/server/errors";
 
@@ -42,7 +42,7 @@ export function ForgotPasswordForm({
     <form onSubmit={onSubmit} method="post" className="space-y-5" noValidate>
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
-        <Input id="email" type="email" autoComplete="email" autoFocus aria-invalid={!!errors.email} {...form.register("email")} />
+        <IconInput icon="mail" id="email" type="email" autoComplete="email" autoFocus placeholder="you@example.com" aria-invalid={!!errors.email} {...form.register("email")} />
         {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
       </div>
       {errors.root && (
