@@ -1,7 +1,6 @@
-import { ChevronLeft, ChevronRight, Search, Shirt } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ChevronRight, Search, Shirt } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { StockBadge } from "@/components/shop/stock-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/format";
@@ -52,30 +51,100 @@ function Chip({ href, active, children }: { href: string; active: boolean; child
   );
 }
 
-function ProductCard({ item, currency }: { item: ShopItem; currency: string }) {
+/** Shop card: photo first (a second photo fades in on hover), then name, price and the sizes still in stock. */
+function ProductCard({ item, currency, index }: { item: ShopItem; currency: string; index: number }) {
   const soldOut = item.available <= 0;
+  const few = !soldOut && item.available <= 3;
   return (
-    <Link href={`/p/${item.slug}`} className="group space-y-3">
-      <div className="relative overflow-hidden rounded-2xl bg-muted">
+    <Link
+      href={`/p/${item.slug}`}
+      className="group block rounded-3xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:outline-none motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:fill-mode-both motion-safe:duration-500"
+      style={{ animationDelay: `${Math.min(index, 12) * 50}ms` }}
+    >
+      <div className="relative overflow-hidden rounded-3xl bg-muted ring-1 ring-foreground/5 transition-shadow duration-500 group-hover:shadow-2xl group-hover:shadow-foreground/10">
         {item.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- CDN or local storage URL
-          <img
-            src={item.imageUrl}
-            alt={item.name}
-            loading="lazy"
-            className={cn("aspect-[4/5] w-full object-cover transition duration-300 group-hover:scale-[1.03]", soldOut && "opacity-60")}
-          />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- CDN or local storage URL */}
+            <img
+              src={item.imageUrl}
+              alt={item.name}
+              loading={index < 4 ? "eager" : "lazy"}
+              className={cn(
+                "aspect-[4/5] w-full object-cover transition duration-700 ease-out group-hover:scale-[1.06]",
+                item.hoverUrl && "group-hover:opacity-0",
+                soldOut && "opacity-55 grayscale",
+              )}
+            />
+            {item.hoverUrl && !soldOut && (
+              // eslint-disable-next-line @next/next/no-img-element -- CDN or local storage URL
+              <img
+                src={item.hoverUrl}
+                alt=""
+                aria-hidden
+                loading="lazy"
+                className="absolute inset-0 size-full scale-[1.06] object-cover opacity-0 transition duration-700 ease-out group-hover:scale-100 group-hover:opacity-100"
+              />
+            )}
+          </>
         ) : (
-          <div className="grid aspect-[4/5] place-items-center">
-            <Shirt className="size-8 text-muted-foreground" />
+          <div className="grid aspect-[4/5] place-items-center bg-gradient-to-br from-muted to-accent">
+            <Shirt className="size-10 text-muted-foreground/40" strokeWidth={1.25} />
           </div>
         )}
-        <StockBadge available={item.available} className="absolute top-3 left-3" />
+
+        {/* One badge at most, so the photo stays clean: scarcity first, then "New in". */}
+        {few ? (
+          <span className="absolute top-3 left-3 rounded-full bg-background/90 px-2.5 py-1 text-[11px] font-semibold text-warning-foreground shadow-sm backdrop-blur-md dark:text-warning">
+            Only {item.available} left
+          </span>
+        ) : (
+          item.isNew &&
+          !soldOut && (
+            <span className="absolute top-3 left-3 rounded-full bg-brand px-2.5 py-1 text-[10px] font-semibold tracking-[0.16em] text-brand-foreground uppercase shadow-sm">
+              New in
+            </span>
+          )
+        )}
+
+        {soldOut ? (
+          <span className="absolute inset-x-0 bottom-4 mx-auto w-fit rounded-full bg-foreground/90 px-4 py-1.5 text-[11px] font-semibold tracking-[0.18em] text-background uppercase">
+            Sold out
+          </span>
+        ) : (
+          <>
+            {/* Laptop: a bar slides up on hover. Phone (no hover): a small arrow sits top right, clear of the photo's logo. */}
+            <span className="absolute inset-x-3 bottom-3 hidden translate-y-[calc(100%+1rem)] items-center justify-between rounded-full bg-background/90 py-1.5 pr-1.5 pl-4 text-sm font-medium shadow-lg backdrop-blur-md transition-transform duration-500 ease-out group-hover:translate-y-0 sm:flex">
+              View &amp; order
+              <span className="grid size-8 place-items-center rounded-full bg-foreground text-background">
+                <ArrowUpRight className="size-4" />
+              </span>
+            </span>
+            <span className="absolute top-2.5 right-2.5 grid size-8 place-items-center rounded-full bg-background/90 shadow-md backdrop-blur-md sm:hidden">
+              <ArrowUpRight className="size-4" />
+            </span>
+          </>
+        )}
       </div>
-      <div className="space-y-1 px-0.5">
-        <p className="text-xs text-muted-foreground">{[item.category, AUDIENCE_LABEL[item.audience]].filter(Boolean).join(" · ")}</p>
-        <h2 className="leading-snug font-medium group-hover:underline group-hover:underline-offset-4">{item.name}</h2>
-        <p className="font-semibold tabular">{formatMoney(item.price, currency)}</p>
+
+      <div className="mt-3 space-y-1.5 px-1">
+        <p className="truncate text-[10px] font-medium tracking-[0.16em] text-muted-foreground uppercase sm:text-[11px]">
+          {[item.category, AUDIENCE_LABEL[item.audience]].filter(Boolean).join(" · ")}
+        </p>
+        <h2 className="line-clamp-2 font-display text-[15px] leading-snug tracking-tight decoration-brand/50 underline-offset-4 group-hover:underline sm:text-lg">
+          {item.name}
+        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          <p className={cn("text-base font-semibold tracking-tight tabular sm:text-lg", soldOut && "text-muted-foreground")}>{formatMoney(item.price, currency)}</p>
+          {!soldOut && item.sizes.length > 0 && (
+            <div className="flex gap-1" aria-label={`Sizes: ${item.sizes.join(", ")}`}>
+              {item.sizes.map((s) => (
+                <span key={s} className="grid h-6 min-w-6 place-items-center rounded-md border px-1 text-[10px] font-semibold text-muted-foreground">
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </Link>
   );
@@ -148,9 +217,9 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
         </div>
 
         {shop.items.length ? (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4">
-            {shop.items.map((item) => (
-              <ProductCard key={item.slug} item={item} currency={shop.currency} />
+          <div className="grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-6 sm:gap-y-12 md:grid-cols-3 lg:grid-cols-4">
+            {shop.items.map((item, i) => (
+              <ProductCard key={item.slug} item={item} currency={shop.currency} index={i} />
             ))}
           </div>
         ) : (

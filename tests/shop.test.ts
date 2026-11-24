@@ -28,7 +28,7 @@ describe("shop page", () => {
     expect(shop.total).toBe(1);
     const json = JSON.stringify(shop);
     for (const leak of ["purchase", "cost", "margin", "profit", live.id, ids.staffId, ids.adminId]) expect(json).not.toContain(leak);
-    expect(Object.keys(shop.items[0]).sort()).toEqual(["audience", "available", "category", "imageUrl", "name", "price", "slug"]);
+    expect(Object.keys(shop.items[0]).sort()).toEqual(["audience", "available", "category", "hoverUrl", "imageUrl", "isNew", "name", "price", "sizes", "slug"]);
     expect(shop.items[0].imageUrl).toMatch(/derived\//); // the re-encoded copy, never the original upload
   });
 

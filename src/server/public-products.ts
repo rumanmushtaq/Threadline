@@ -136,7 +136,13 @@ export type ShopItem = {
   audience: Audience;
   price: number;
   available: number;
+  /** Sizes with pieces left, smallest first. */
+  sizes: string[];
+  /** Listed in the last 14 days. */
+  isNew: boolean;
   imageUrl: string | null;
+  /** A second approved photo, shown when the card is hovered. */
+  hoverUrl: string | null;
 };
 
 const onSale = and(eq(publicProductLinks.isActive, true), eq(products.isPublished, true), eq(products.status, "active"));
@@ -153,6 +159,10 @@ export async function listShop(db: Executor, f: ShopFilters) {
   const image = sql<string | null>`(SELECT pi.thumb_key FROM product_images pi
      WHERE pi.product_id = ${products.id} AND pi.kind IN ('ai_model', 'photo', 'original') AND pi.display_key IS NOT NULL AND pi.review = 'approved'
      ORDER BY (pi.kind <> 'original') DESC, pi.created_at DESC, pi.variant LIMIT 1)`;
+  const hoverImage = sql<string | null>`(SELECT pi.thumb_key FROM product_images pi
+     WHERE pi.product_id = ${products.id} AND pi.kind IN ('ai_model', 'photo', 'original') AND pi.display_key IS NOT NULL AND pi.review = 'approved'
+     ORDER BY (pi.kind <> 'original') DESC, pi.created_at DESC, pi.variant LIMIT 1 OFFSET 1)`;
+  const sizes = sql<string[]>`coalesce((SELECT array_agg(ps.size::text ORDER BY array_position(ARRAY['XS','S','M','L','XL'], ps.size::text)) FROM product_sizes ps WHERE ps.product_id = ${products.id} AND ps.on_hand - ps.reserved > 0), '{}')`;
   const order =
     f.sort === "price-asc" ? asc(products.sellingPriceMinor) : f.sort === "price-desc" ? desc(products.sellingPriceMinor) : desc(products.createdAt);
 
@@ -165,7 +175,10 @@ export async function listShop(db: Executor, f: ShopFilters) {
         audience: products.audience,
         price: products.sellingPriceMinor,
         available,
+        sizes,
+        isNew: sql<boolean>`${products.createdAt} > now() - interval '14 days'`,
         image,
+        hoverImage,
       })
       .from(publicProductLinks)
       .innerJoin(products, eq(products.id, publicProductLinks.productId))
@@ -197,7 +210,7 @@ export async function listShop(db: Executor, f: ShopFilters) {
   ]);
 
   return {
-    items: rows.map(({ image, ...r }): ShopItem => ({ ...r, imageUrl: fileUrl(image) })),
+    items: rows.map(({ image, hoverImage, ...r }): ShopItem => ({ ...r, imageUrl: fileUrl(image), hoverUrl: fileUrl(hoverImage) })),
     total,
     pages: Math.max(1, Math.ceil(total / SHOP_PAGE_SIZE)),
     categories: cats.map((c) => ({ name: c.name, slug: c.slug, count: c.n })),
