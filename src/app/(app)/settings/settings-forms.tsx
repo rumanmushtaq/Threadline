@@ -52,7 +52,7 @@ export function AccountSettings({ name, email }: { name: string; email: string }
   });
   return (
     <Section title="Your account" description={`${name} · ${email}`}>
-      <form onSubmit={submit} method="post" noValidate className="grid gap-4 sm:grid-cols-3">
+      <form onSubmit={submit} method="post" noValidate className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {(["current", "password", "confirm"] as const).map((k) => (
           <div key={k} className="space-y-2">
             <Label htmlFor={`pw-${k}`}>{k === "current" ? "Current password" : k === "password" ? "New password" : "Confirm new password"}</Label>
@@ -86,7 +86,7 @@ export function SystemSettings({ defaults }: { defaults: SettingsValues }) {
   const num = { valueAsNumber: true } as const;
   return (
     <Section title="Workspace" description="Brand shown on marketing images and public pages, stock alerts and order rules.">
-      <form onSubmit={submit} noValidate className="grid gap-5 sm:grid-cols-2">
+      <form onSubmit={submit} noValidate className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="brandName">Brand name</Label>
           <Input id="brandName" {...form.register("brandName")} />
@@ -265,7 +265,7 @@ export function LogoSettings({ brand, on, pending }: { brand: string; on: boolea
 
   return (
     <Section title="Logo" description="Made from your brand name. It is stamped in the chosen corner of the photos customers see.">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {(["light", "dark"] as const).map((t) => (
           <div key={t} className={`grid h-32 place-items-center rounded-lg border ${t === "dark" ? "bg-[#231d18]" : "bg-[#f8f4ee]"}`}>
             {/* eslint-disable-next-line @next/next/no-img-element -- generated PNG */}

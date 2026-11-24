@@ -96,7 +96,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <ProductGallery
           images={product.images.map((i) => ({ id: i.id, kind: i.kind, review: i.review, url: i.url, originalUrl: i.originalUrl, thumbUrl: i.thumbUrl, variant: i.variant }))}
           job={latestJob ? { status: latestJob.status, attempts: latestJob.attempts, maxAttempts: latestJob.maxAttempts, lastError: latestJob.lastError } : null}

@@ -41,7 +41,7 @@ export function EditProductForm({
 
   return (
     <form onSubmit={submit} noValidate className="space-y-5 rounded-xl border bg-card p-6">
-      <div className="grid gap-4 sm:grid-cols-[1fr_220px]">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_220px]">
         <div className="space-y-2">
           <Label htmlFor="name">Product name</Label>
           <Input id="name" aria-invalid={!!errors.name} {...form.register("name")} />
@@ -69,7 +69,7 @@ export function EditProductForm({
         <Textarea id="description" rows={5} aria-invalid={!!errors.description} {...form.register("description")} />
         {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {(["purchasePrice", "sellingPrice"] as const).map((k) => (
           <div key={k} className="space-y-2">
             <Label htmlFor={k}>{k === "purchasePrice" ? "Purchase price per piece" : "Target sale price per piece"}</Label>

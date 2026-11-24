@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Link2,
   LogOut,
+  Smartphone,
   Moon,
   PlusCircle,
   Settings,
@@ -181,6 +182,11 @@ function UserMenu({ user }: { user: ShellUser }) {
         <DropdownMenuItem asChild>
           <Link href="/settings">
             <Settings /> Settings
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/install">
+            <Smartphone /> Install app on phone
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => logoutAction()}>

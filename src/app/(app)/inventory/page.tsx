@@ -44,7 +44,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
     <>
       <PageHeader title="Inventory" description="Size-wise stock across all active products. Every change is written to the stock ledger." />
       <InventoryFilters />
-      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_380px]">
         {inv.rows.length === 0 ? (
           <EmptyState icon={Boxes} title="No stock rows match" description="Create products or change the filters." />
         ) : (

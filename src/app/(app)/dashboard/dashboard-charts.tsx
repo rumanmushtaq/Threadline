@@ -40,7 +40,7 @@ export function DashboardCharts({
   const anyMovement = movement.some((m) => m.added || m.removed);
 
   return (
-    <section className="grid gap-6 lg:grid-cols-3">
+    <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <ChartCard title="Stock movement" subtitle={`Pieces in and out per ${movementUnit} · ${rangeLabel}`} className="lg:col-span-2">
         {anyMovement ? (
           <ChartContainer config={movementConfig} className="h-64 w-full">

@@ -1,4 +1,4 @@
-import { ArrowUpRight, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, ShieldCheck, Smartphone } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -9,8 +9,10 @@ import { db } from "@/server/db";
 import { listShop, shopFiltersSchema } from "@/server/public-products";
 import { LoginForm } from "./login-form";
 import { Lookbook } from "@/components/shop/lookbook";
+import { teamAppMetadata, teamAppViewport } from "@/lib/team-app";
 
-export const metadata: Metadata = { title: "Sign in" };
+export const metadata: Metadata = { title: "Sign in", ...teamAppMetadata };
+export const viewport = teamAppViewport;
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
   if (await getCurrentUser()) redirect("/dashboard");
@@ -78,6 +80,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             Shopping with us?{" "}
             <Link href="/account/login" className="font-medium text-foreground underline-offset-4 hover:underline">
               Customer sign in
+            </Link>
+            <span className="mx-2">·</span>
+            <Link href="/install" className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-4 hover:underline">
+              <Smartphone className="size-3.5" /> Install the team app
             </Link>
           </p>
         </div>

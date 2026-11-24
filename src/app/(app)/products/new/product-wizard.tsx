@@ -126,7 +126,7 @@ export function ProductWizard({ categories, currency, aiEnabled }: { categories:
     (errors.sizes as { root?: { message?: string } } | undefined)?.root?.message;
 
   return (
-    <form onSubmit={onSubmit} noValidate className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <form onSubmit={onSubmit} noValidate className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="space-y-5">
         <Step id="step-photo" n={1} title="Product picture" hint="The original photo. It is kept untouched and used as the AI reference.">
           <ImageDropzone
@@ -157,7 +157,7 @@ export function ProductWizard({ categories, currency, aiEnabled }: { categories:
         </Step>
 
         <Step n={3} title="Name & description" hint="What customers will read on the product page.">
-          <div className="grid gap-4 sm:grid-cols-[1fr_220px]">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_220px]">
             <div className="space-y-2">
               <Label htmlFor="name">Product name</Label>
               <Input id="name" placeholder="Oversized Cotton Tee" aria-invalid={!!errors.name} {...register("name")} />
@@ -202,7 +202,7 @@ export function ProductWizard({ categories, currency, aiEnabled }: { categories:
         </Step>
 
         <Step n={4} title="Gender / age group & sizes" hint="Sizes change with the group. Split the total quantity across them.">
-          <div role="radiogroup" aria-label="Gender / age group" className="grid gap-3 sm:grid-cols-3">
+          <div role="radiogroup" aria-label="Gender / age group" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {AUDIENCES.map((a) => (
               <button
                 key={a}

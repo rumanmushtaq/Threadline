@@ -75,7 +75,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
       <DashboardCharts movement={d.movement.points} movementUnit={d.movement.unit} rangeLabel={range.label} byCategory={d.byCategory} byAudience={d.byAudience} />
 
-      <section className="grid gap-6 lg:grid-cols-3">
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Panel title="Recent products" href="/products">
           {d.recentProducts.length === 0 ? (
             <Empty text="No products yet." />
