@@ -110,6 +110,7 @@ export async function saleOptions(db: Executor) {
       sku: products.sku,
       name: products.name,
       sellingPriceMinor: products.sellingPriceMinor,
+      purchasePriceMinor: products.purchasePriceMinor,
       size: productSizes.size,
       available: sql<number>`${productSizes.onHand} - ${productSizes.reserved}`,
     })
@@ -118,9 +119,9 @@ export async function saleOptions(db: Executor) {
     .where(and(eq(products.status, "active"), gt(sql`${productSizes.onHand} - ${productSizes.reserved}`, 0)))
     .orderBy(asc(products.name), asc(productSizes.size));
 
-  const byProduct = new Map<string, { id: string; sku: string; name: string; sellingPriceMinor: number; sizes: { size: (typeof rows)[number]["size"]; available: number }[] }>();
+  const byProduct = new Map<string, { id: string; sku: string; name: string; sellingPriceMinor: number; purchasePriceMinor: number; sizes: { size: (typeof rows)[number]["size"]; available: number }[] }>();
   for (const r of rows) {
-    const p = byProduct.get(r.id) ?? { id: r.id, sku: r.sku, name: r.name, sellingPriceMinor: r.sellingPriceMinor, sizes: [] };
+    const p = byProduct.get(r.id) ?? { id: r.id, sku: r.sku, name: r.name, sellingPriceMinor: r.sellingPriceMinor, purchasePriceMinor: r.purchasePriceMinor, sizes: [] };
     p.sizes.push({ size: r.size, available: Number(r.available) });
     byProduct.set(r.id, p);
   }

@@ -18,7 +18,14 @@ import { SIZE_LABEL, type Size } from "@/lib/sizes";
 import { recordSaleSchema, type RecordSaleInput } from "@/lib/validation/sale";
 import { recordShopSaleAction } from "./actions";
 
-export type SaleOption = { id: string; sku: string; name: string; sellingPriceMinor: number; sizes: { size: Size; available: number }[] };
+export type SaleOption = {
+  id: string;
+  sku: string;
+  name: string;
+  sellingPriceMinor: number;
+  purchasePriceMinor: number;
+  sizes: { size: Size; available: number }[];
+};
 
 /** "Record shop sale": for cash sales in the shop. Stock goes down and the sale counts at once. */
 export function RecordSale({ options, currency, today }: { options: SaleOption[]; currency: string; today: string }) {
@@ -109,12 +116,9 @@ export function RecordSaleDialog(props: {
         ) : (
           <form id="record-sale" onSubmit={submit} className="space-y-4" noValidate>
             {fixed ? (
-              <div className="rounded-lg border bg-muted/40 px-3 py-2.5">
+              <div>
                 <p className="font-medium">{fixed.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-mono">{fixed.sku}</span> · target {formatMoney(fixed.sellingPriceMinor, currency)} ·{" "}
-                  {fixed.sizes.reduce((n, s) => n + s.available, 0)} in stock
-                </p>
+                <p className="font-mono text-xs text-muted-foreground">{fixed.sku}</p>
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -148,6 +152,8 @@ export function RecordSaleDialog(props: {
                 {errors.productId && <p className="text-xs text-destructive">{errors.productId.message}</p>}
               </div>
             )}
+
+            {product && <PriceStrip product={product} currency={currency} />}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -193,7 +199,7 @@ export function RecordSaleDialog(props: {
                 {errors.unitPrice ? (
                   <p className="text-xs text-destructive">{errors.unitPrice.message}</p>
                 ) : (
-                  product && <p className="text-xs text-muted-foreground">Target {formatMoney(product.sellingPriceMinor, currency)} · product prices stay the same</p>
+                  product && <p className="text-xs text-muted-foreground">Saved on this sale only. Product prices stay the same.</p>
                 )}
               </div>
               <div className="space-y-1.5">
@@ -225,8 +231,11 @@ export function RecordSaleDialog(props: {
             </div>
 
             {product && Number.isFinite(unitPrice) && Number.isFinite(quantity) && quantity > 0 && (
-              <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm">
-                Total <strong className="tabular">{formatMoney(Math.round(unitPrice * 100) * quantity, currency)}</strong>
+              <p className="flex flex-wrap justify-between gap-x-4 gap-y-1 rounded-lg bg-muted/60 px-3 py-2 text-sm">
+                <span>
+                  Total <strong className="tabular">{formatMoney(Math.round(unitPrice * 100) * quantity, currency)}</strong>
+                </span>
+                <ProfitText minor={(Math.round(unitPrice * 100) - product.purchasePriceMinor) * quantity} currency={currency} />
               </p>
             )}
           </form>
@@ -244,5 +253,32 @@ export function RecordSaleDialog(props: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** The product's two stored prices and stock, so the seller sees cost and target before typing the sell price. */
+function PriceStrip({ product, currency }: { product: SaleOption; currency: string }) {
+  const cells = [
+    { label: "Purchase price", value: formatMoney(product.purchasePriceMinor, currency) },
+    { label: "Target sale price", value: formatMoney(product.sellingPriceMinor, currency) },
+    { label: "In stock", value: `${product.sizes.reduce((n, s) => n + s.available, 0)} pcs` },
+  ];
+  return (
+    <dl className="grid grid-cols-3 divide-x rounded-lg border bg-muted/40">
+      {cells.map((c) => (
+        <div key={c.label} className="px-3 py-2">
+          <dt className="text-[11px] text-muted-foreground">{c.label}</dt>
+          <dd className="tabular text-sm font-semibold">{c.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function ProfitText({ minor, currency }: { minor: number; currency: string }) {
+  return (
+    <span className={minor < 0 ? "text-destructive" : "text-success"}>
+      {minor < 0 ? "Loss" : "Profit"} <strong className="tabular">{formatMoney(Math.abs(minor), currency)}</strong>
+    </span>
   );
 }

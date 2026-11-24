@@ -54,7 +54,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     can(user.role, "sale.record") && product.status === "active"
       ? {
           option: inStock.length
-            ? { id: product.id, sku: product.sku, name: product.name, sellingPriceMinor: product.sellingPriceMinor, sizes: inStock.map((s) => ({ size: s.size, available: s.onHand - s.reserved })) }
+            ? { id: product.id, sku: product.sku, name: product.name, sellingPriceMinor: product.sellingPriceMinor, purchasePriceMinor: product.purchasePriceMinor, sizes: inStock.map((s) => ({ size: s.size, available: s.onHand - s.reserved })) }
             : undefined,
           currency: cur,
           today: businessToday(),
