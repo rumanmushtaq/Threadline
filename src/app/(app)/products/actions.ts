@@ -13,7 +13,7 @@ import { requestMeta, requirePermission } from "@/server/auth/current";
 import { db } from "@/server/db";
 import { AppError } from "@/server/errors";
 import { recordStockMovement, stockMovementSchema } from "@/server/inventory";
-import { createProduct, setProductArchived, setProductPublished, updateProduct } from "@/server/products";
+import { createProduct, deleteProduct, setProductArchived, setProductPublished, updateProduct } from "@/server/products";
 import { createUploadTicket, limitUploadTickets, resolveUploadedImage, uploadedImageSchema } from "@/server/uploads";
 import { appUrl } from "@/server/app-url";
 
@@ -85,6 +85,19 @@ export async function setArchivedAction(input: unknown) {
     await setProductArchived(db, user.id, id, value);
     revalidatePath(`/products/${id}`);
     revalidatePath("/products");
+    return null;
+  });
+}
+
+export async function deleteProductAction(input: unknown) {
+  return runAction(async () => {
+    const user = await requirePermission("product.delete");
+    const { id } = parseOrThrow(z.object({ id: z.uuid() }), input);
+    await deleteProduct(db, user.id, id);
+    revalidatePath("/products");
+    revalidatePath("/inventory");
+    revalidatePath("/dashboard");
+    revalidatePath("/shop");
     return null;
   });
 }

@@ -282,3 +282,38 @@ describe("stored file safety", () => {
     expect(pub!.images[0].url).toMatch(/\/derived\//);
   });
 });
+
+describe("deleting products", () => {
+  it("removes a product that never sold, with its stock, photos, link and files", async () => {
+    const { deleteProduct } = await import("@/server/products");
+    const { storage } = await import("@/server/storage");
+    const p = await createProduct(db, ids.staffId, productInput(), await testImage());
+    const [img] = await db.select().from(productImages).where(eq(productImages.productId, p.id));
+    await deleteProduct(db, ids.adminId, p.id);
+    expect(await db.select().from(productImages).where(eq(productImages.productId, p.id))).toHaveLength(0);
+    expect(await db.select().from(inventoryTransactions).where(eq(inventoryTransactions.productId, p.id))).toHaveLength(0);
+    expect(await db.select().from(publicProductLinks).where(eq(publicProductLinks.productId, p.id))).toHaveLength(0);
+    expect(await getProductDetail(db, p.id)).toBeNull();
+    await expect(storage().get(img.storageKey)).rejects.toThrow();
+    expect((await db.select().from(activityLogs).where(eq(activityLogs.action, "product.deleted")))[0].metadata).toMatchObject({ sku: p.sku });
+  });
+
+  it("refuses a product with shop sales or orders, and the history guard stays on", async () => {
+    const { deleteProduct } = await import("@/server/products");
+    const { recordShopSale } = await import("@/server/shop-sales");
+    const { businessToday } = await import("@/server/date-range");
+    const p = await createProduct(db, ids.staffId, productInput(), await testImage());
+    await recordShopSale(db, ids.adminId, { productId: p.id, size: "M", quantity: 1, unitPrice: 1500, soldOn: businessToday() });
+    await expect(deleteProduct(db, ids.adminId, p.id)).rejects.toThrow(/Archive it instead/);
+    expect(await getProductDetail(db, p.id)).not.toBeNull();
+    // Outside a product delete, stock history still cannot be removed.
+    await expect(db.delete(inventoryTransactions).where(eq(inventoryTransactions.productId, p.id))).rejects.toThrow();
+    await expect(deleteProduct(db, ids.adminId, "00000000-0000-4000-8000-000000000000")).rejects.toThrow(/not found/);
+  });
+
+  it("is for the admin only", async () => {
+    const { can } = await import("@/server/auth/permissions");
+    expect(can("admin", "product.delete")).toBe(true);
+    expect(can("staff", "product.delete")).toBe(false);
+  });
+});

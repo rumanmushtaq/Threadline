@@ -12,7 +12,7 @@ import { availableProviders, PROVIDER_LABEL } from "@/server/ai/provider";
 import { requirePageUser } from "@/server/auth/current";
 import { db } from "@/server/db";
 import { stockHistory } from "@/server/inventory";
-import { getProductDetail } from "@/server/products";
+import { getProductDetail, productHistory } from "@/server/products";
 import { getSettings } from "@/server/settings";
 import { ProductActions } from "./product-actions";
 import { ProductGallery } from "./product-gallery";
@@ -37,7 +37,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const [product, settings] = await Promise.all([getProductDetail(db, id), getSettings(db)]);
   if (!product) notFound();
-  const history = await stockHistory(db, id, 50);
+  const [history, salesHistory] = await Promise.all([stockHistory(db, id, 50), productHistory(db, id)]);
 
   const cur = settings.currencySymbol;
   const onHand = product.sizes.reduce((s, r) => s + r.onHand, 0);
@@ -76,6 +76,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             publicUrl={`${siteUrl}/p/${product.link?.slug ?? product.sku}`}
             aiBusy={latestJob?.status === "pending" || latestJob?.status === "processing"}
             providers={availableProviders().map((name) => ({ name, label: PROVIDER_LABEL[name] }))}
+            sku={product.sku}
+            history={salesHistory}
           />
         </div>
       </div>

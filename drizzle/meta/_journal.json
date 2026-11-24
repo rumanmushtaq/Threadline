@@ -99,6 +99,13 @@
       "when": 1795461210348,
       "tag": "0013_expenses",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795465391705,
+      "tag": "0014_product_delete",
+      "breakpoints": true
     }
   ]
 }

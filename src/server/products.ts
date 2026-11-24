@@ -11,6 +11,7 @@ import type { Database, Executor } from "./db";
 import {
   aiGenerationJobs,
   categories,
+  inventoryTransactions,
   productImages,
   products,
   productSizes,
@@ -183,6 +184,50 @@ export async function setProductArchived(db: Database, actorId: string, id: stri
       metadata: { sku: row.sku },
     });
   });
+}
+
+/** Sales and orders that keep a product from being deleted (cancelled shop sales count too: they are history). */
+export async function productHistory(db: Executor, id: string) {
+  const [r] = (
+    await db.execute<{ orders: number; sales: number }>(sql`
+      SELECT (SELECT count(*)::int FROM order_items WHERE product_id = ${id}) AS orders,
+             (SELECT count(*)::int FROM shop_sales WHERE product_id = ${id}) AS sales`)
+  ).rows;
+  return { orders: Number(r.orders), sales: Number(r.sales) };
+}
+
+/**
+ * Deletes a product for good, with its sizes, stock entries, photos and link. Only for a
+ * product that never sold: anything with orders or shop sales is part of the money history
+ * and can only be archived.
+ */
+export async function deleteProduct(db: Database, actorId: string, id: string) {
+  const images = await db.transaction(async (tx) => {
+    const [product] = await tx.select({ id: products.id, sku: products.sku, name: products.name }).from(products).where(eq(products.id, id)).for("update");
+    if (!product) throw new AppError("Product not found.", "NOT_FOUND");
+    const history = await productHistory(tx, id);
+    if (history.orders || history.sales) {
+      throw new AppError("This product has sales or orders, so it is part of your money history. Archive it instead.", "CONFLICT");
+    }
+    // Lets the history guard allow deleting only this product's stock entries, only in this transaction.
+    await tx.execute(sql`SELECT set_config('threadline.purge_product', ${id}, true)`);
+    await tx.delete(inventoryTransactions).where(eq(inventoryTransactions.productId, id));
+    const imgs = await tx.delete(productImages).where(eq(productImages.productId, id)).returning();
+    await tx.delete(aiGenerationJobs).where(eq(aiGenerationJobs.productId, id));
+    await tx.delete(publicProductLinks).where(eq(publicProductLinks.productId, id));
+    await tx.delete(productSizes).where(eq(productSizes.productId, id));
+    await tx.delete(products).where(eq(products.id, id));
+    await logActivity(tx, {
+      userId: actorId,
+      action: "product.deleted",
+      entityType: "product",
+      entityId: id,
+      metadata: { sku: product.sku, name: product.name },
+    });
+    return imgs;
+  });
+  // Files go only after the rows are gone, so a failed delete never leaves broken photos.
+  await Promise.allSettled(images.map((i) => deleteStoredImage({ storageKey: i.storageKey, thumbKey: i.thumbKey ?? "", displayKey: i.displayKey })));
 }
 
 export async function setProductPublished(db: Database, actorId: string, id: string, published: boolean) {

@@ -1,9 +1,9 @@
 "use client";
 
-import { Archive, ArchiveRestore, ChevronDown, Copy, ExternalLink, Eye, EyeOff, Pencil, Sparkles } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronDown, Copy, ExternalLink, Eye, EyeOff, Pencil, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { useCan } from "@/components/app/permissions";
 import {
@@ -20,7 +20,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { ProviderName } from "@/server/ai/provider";
-import { regenerateImagesAction, setArchivedAction, setPublishedAction } from "../actions";
+import { deleteProductAction, regenerateImagesAction, setArchivedAction, setPublishedAction } from "../actions";
+import { Input } from "@/components/ui/input";
 
 export function ProductActions(props: {
   id: string;
@@ -30,10 +31,15 @@ export function ProductActions(props: {
   publicUrl: string;
   aiBusy: boolean;
   providers: { name: ProviderName; label: string }[];
+  sku: string;
+  /** Orders and shop sales that keep this product from being deleted. */
+  history: { orders: number; sales: number };
 }) {
   const can = useCan();
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [confirmSku, setConfirmSku] = useState("");
+  const deletable = props.history.orders === 0 && props.history.sales === 0;
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, success: string) =>
     start(async () => {
@@ -137,6 +143,62 @@ export function ProductActions(props: {
               >
                 {props.archived ? "Restore" : "Archive"}
               </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+      {can("product.delete") && (
+        <AlertDialog onOpenChange={() => setConfirmSku("")}>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" disabled={pending} className="text-destructive hover:text-destructive">
+              <Trash2 /> Delete
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{deletable ? `Delete ${props.name} for good?` : "This product can't be deleted"}</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                {deletable ? (
+                  <div className="space-y-3">
+                    <p>
+                      This removes the product, its sizes and stock entries, its photos and its public link. <strong>It cannot be undone.</strong> To only hide it, use
+                      Archive instead.
+                    </p>
+                    <label className="block space-y-1.5 text-foreground">
+                      <span className="text-sm">
+                        Type <span className="font-mono font-semibold">{props.sku}</span> to confirm
+                      </span>
+                      <Input value={confirmSku} onChange={(e) => setConfirmSku(e.target.value)} autoComplete="off" placeholder={props.sku} aria-label="Type the SKU to confirm" />
+                    </label>
+                  </div>
+                ) : (
+                  <p>
+                    It has {props.history.sales} shop sale{props.history.sales === 1 ? "" : "s"} and {props.history.orders} order line{props.history.orders === 1 ? "" : "s"}, so it is
+                    part of your sales and profit history. Deleting it would change those totals. Archive it instead: it disappears from the shop and lists, and
+                    the history stays correct.
+                  </p>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{deletable ? "Cancel" : "Close"}</AlertDialogCancel>
+              {deletable && (
+                <AlertDialogAction
+                  variant="destructive"
+                  disabled={confirmSku.trim().toUpperCase() !== props.sku.toUpperCase()}
+                  onClick={() =>
+                    start(async () => {
+                      const res = await deleteProductAction({ id: props.id });
+                      if (!res.ok) return void toast.error(res.error);
+                      toast.success(`${props.sku} deleted`);
+                      router.push("/products");
+                      router.refresh();
+                    })
+                  }
+                >
+                  <Trash2 /> Delete for good
+                </AlertDialogAction>
+              )}
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

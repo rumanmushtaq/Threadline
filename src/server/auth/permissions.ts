@@ -5,6 +5,7 @@ export const PERMISSIONS = [
   "product.create",
   "product.edit",
   "product.archive",
+  "product.delete",
   "product.publish",
   "inventory.view",
   "inventory.stock_in",
