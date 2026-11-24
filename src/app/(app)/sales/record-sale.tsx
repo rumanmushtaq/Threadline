@@ -41,18 +41,19 @@ export function RecordSale({ options, currency, today }: { options: SaleOption[]
 }
 
 /** "Sold" button for one product: opens the sale form with that product already chosen. */
-export function SoldButton({ option, currency, today, size = "sm" }: { option: SaleOption | undefined; currency: string; today: string; size?: "sm" | "default" }) {
+export function SoldButton(props: { option: SaleOption | undefined; currency: string; today: string; size?: "sm" | "default"; className?: string }) {
+  const { option, currency, today, size = "sm", className } = props;
   const [open, setOpen] = useState(false);
   if (!option) {
     return (
-      <Button variant="outline" size={size} disabled title="No pieces left to sell">
+      <Button variant="outline" size={size} className={className} disabled title="No pieces left to sell">
         <HandCoins /> Sold
       </Button>
     );
   }
   return (
     <>
-      <Button variant="outline" size={size} onClick={() => setOpen(true)} aria-label={`Record a sale of ${option.name}`}>
+      <Button variant="outline" size={size} className={className} onClick={() => setOpen(true)} aria-label={`Record a sale of ${option.name}`}>
         <HandCoins /> Sold
       </Button>
       {open && <RecordSaleDialog options={[option]} productId={option.id} currency={currency} today={today} open onOpenChange={setOpen} />}

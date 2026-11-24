@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { LayoutGrid, List, Search, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
@@ -71,12 +71,49 @@ export function ProductFiltersBar({ categories }: { categories: { id: string; na
           size="sm"
           onClick={() => {
             setQ("");
-            startTransition(() => router.replace(pathname));
+            const view = params.get("view");
+            startTransition(() => router.replace(view ? `${pathname}?view=${view}` : pathname));
           }}
         >
           <X /> Clear
         </Button>
       )}
+      <ViewSwitch
+        view={params.get("view") === "list" ? "list" : "grid"}
+        onChange={(v) => {
+          const next = new URLSearchParams(params);
+          if (v === "list") next.set("view", "list");
+          else next.delete("view");
+          startTransition(() => router.replace(`${pathname}?${next}`, { scroll: false }));
+        }}
+      />
+    </div>
+  );
+}
+
+/** Cards (photos first) or the compact list. Kept in the URL so the choice survives filters and paging. */
+function ViewSwitch({ view, onChange }: { view: "grid" | "list"; onChange: (v: "grid" | "list") => void }) {
+  const options = [
+    { value: "grid", label: "Cards", icon: LayoutGrid },
+    { value: "list", label: "List", icon: List },
+  ] as const;
+  return (
+    <div role="group" aria-label="Layout" className="ml-auto flex rounded-lg border bg-muted/60 p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={view === o.value}
+          onClick={() => onChange(o.value)}
+          className={cn(
+            "flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium text-muted-foreground transition-all",
+            view === o.value ? "bg-background text-foreground shadow-sm" : "hover:text-foreground",
+          )}
+        >
+          <o.icon className="size-4" />
+          <span className="hidden sm:inline">{o.label}</span>
+        </button>
+      ))}
     </div>
   );
 }

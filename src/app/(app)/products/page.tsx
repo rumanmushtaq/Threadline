@@ -18,7 +18,9 @@ export const metadata: Metadata = { title: "Products" };
 
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await requirePageUser("product.view");
-  const filters = productFiltersSchema.parse(await searchParams);
+  const params = await searchParams;
+  const filters = productFiltersSchema.parse(params);
+  const view = params.view === "list" ? "list" : "grid";
   const [result, categories, settings, sellable] = await Promise.all([
     listProducts(db, filters),
     listCategories(db),
@@ -67,6 +69,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           threshold={result.lowStockThreshold}
           currency={settings.currencySymbol}
           appUrl={appUrl()}
+          view={view}
           // Only this page's products, so the "Sold" form knows each one's sizes and stock.
           sale={sellable ? { options: sellable.filter((o) => result.rows.some((r) => r.id === o.id)), today: businessToday() } : null}
         />

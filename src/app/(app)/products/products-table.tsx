@@ -20,8 +20,9 @@ import { formatMoney } from "@/lib/format";
 import { AUDIENCE_LABEL, type Audience } from "@/lib/sizes";
 import { type SaleOption, SoldButton } from "../sales/record-sale";
 import { regenerateImagesAction } from "./actions";
+import { ProductGrid } from "./product-cards";
 
-type Row = {
+export type Row = {
   id: string;
   sku: string;
   name: string;
@@ -49,11 +50,27 @@ export function ProductsTable(props: {
   threshold: number;
   currency: string;
   appUrl: string;
+  /** "grid" shows photo cards; "list" the compact table. */
+  view: "grid" | "list";
   /** Set when the user may record sales: adds a "Sold" button to each row. */
   sale: { options: SaleOption[]; today: string } | null;
 }) {
   const { rows, threshold, currency, sale } = props;
   const sold = (r: Row) => sale && <SoldButton option={sale.options.find((o) => o.id === r.id)} currency={currency} today={sale.today} />;
+  if (props.view === "grid") {
+    return (
+      <div className="space-y-6">
+        <ProductGrid
+          rows={rows}
+          threshold={threshold}
+          currency={currency}
+          actions={(r) => <RowActions row={r} appUrl={props.appUrl} />}
+          sold={(r) => sale && <SoldButton option={sale.options.find((o) => o.id === r.id)} currency={currency} today={sale.today} className="w-full" />}
+        />
+        <Pager page={props.page} pageCount={props.pageCount} total={props.total} />
+      </div>
+    );
+  }
   return (
     <div className="space-y-4">
       <div className="hidden overflow-hidden rounded-xl border bg-card md:block">
