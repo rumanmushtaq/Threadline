@@ -20,12 +20,15 @@ export async function recordShopSale(db: Database, actorId: string, raw: unknown
 
   return db.transaction(async (tx) => {
     const [product] = await tx
-      .select({ id: products.id, sku: products.sku, name: products.name, status: products.status, cost: products.purchasePriceMinor })
+      .select({ id: products.id, sku: products.sku, name: products.name, status: products.status, cost: products.purchasePriceMinor, target: products.sellingPriceMinor })
       .from(products)
       .where(eq(products.id, input.productId))
       .for("update");
     if (!product) throw new AppError("Product not found.", "NOT_FOUND");
     if (product.status === "archived") throw new AppError("This product is archived. Restore it before selling.", "VALIDATION");
+    if (toMinor(input.unitPrice) < product.target && !input.note) {
+      throw new AppError("It sold below the target sale price. Add the reason in the note.", "VALIDATION", { note: ["Write why it sold below the target sale price"] });
+    }
 
     const [size] = await tx
       .select({ id: productSizes.id })

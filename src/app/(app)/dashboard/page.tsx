@@ -62,7 +62,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <Kpi icon={Shirt} label="Total products" value={formatNumber(s.products)} note={`${s.kids} kids · ${s.youth} youth · ${s.adult} adult`} />
         <Kpi icon={Boxes} label="Available pieces" value={formatNumber(s.available)} note={`${formatNumber(s.pieces)} on hand · ${formatNumber(s.reserved)} reserved`} />
         <Kpi icon={Wallet} label="Stock value at cost" value={formatMoney(s.purchaseValue, cur)} note="what the stock on hand cost" />
-        <Kpi icon={CircleDollarSign} label="Stock value at selling price" value={formatMoney(s.salesValue, cur)} note="at target prices" />
+        <Kpi icon={CircleDollarSign} label="Stock value at target sale price" value={formatMoney(s.salesValue, cur)} note="at target prices" />
         <Kpi icon={TrendingUp} label="Profit if all stock sells" value={formatMoney(s.estimatedProfit, cur)} note="at target prices" />
         <Kpi icon={AlertTriangle} label="Low stock products" value={formatNumber(s.lowStock)} note={`${d.threshold} or fewer pieces left`} href="/inventory?stock=low" tone={s.lowStock ? "warn" : undefined} />
         <Kpi icon={PackageX} label="Out of stock" value={formatNumber(s.outOfStock)} note="no pieces available" href="/inventory?stock=out" tone={s.outOfStock ? "bad" : undefined} />

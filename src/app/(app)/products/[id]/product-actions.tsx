@@ -22,6 +22,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { ProviderName } from "@/server/ai/provider";
 import { deleteProductAction, regenerateImagesAction, setArchivedAction, setPublishedAction } from "../actions";
 import { Input } from "@/components/ui/input";
+import { type SaleOption, SoldButton } from "../../sales/record-sale";
 
 export function ProductActions(props: {
   id: string;
@@ -34,6 +35,8 @@ export function ProductActions(props: {
   sku: string;
   /** Orders and shop sales that keep this product from being deleted. */
   history: { orders: number; sales: number };
+  /** Set when the user may record sales: shows the "Sold" button. */
+  sale: { option: SaleOption | undefined; currency: string; today: string } | null;
 }) {
   const can = useCan();
   const router = useRouter();
@@ -51,6 +54,7 @@ export function ProductActions(props: {
 
   return (
     <div className="flex flex-wrap gap-2">
+      {props.sale && <SoldButton option={props.sale.option} currency={props.sale.currency} today={props.sale.today} />}
       <Button
         variant="outline"
         size="sm"

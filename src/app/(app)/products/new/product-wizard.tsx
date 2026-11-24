@@ -281,10 +281,10 @@ export function ProductWizard({ categories, currency, aiEnabled }: { categories:
           <PriceInput id="purchasePrice" currency={currency} error={errors.purchasePrice?.message} {...register("purchasePrice", { valueAsNumber: true })} placeholder="800" />
         </Step>
 
-        <Step n={6} title="Target selling price per piece" hint="The price customers see on the product page.">
+        <Step n={6} title="Target sale price per piece" hint="The price customers see on the product page.">
           <PriceInput id="sellingPrice" currency={currency} error={errors.sellingPrice?.message} {...register("sellingPrice", { valueAsNumber: true })} placeholder="1500" />
           {selling > 0 && purchase > selling && (
-            <p className="mt-2 text-xs text-warning">The selling price is below the purchase price — this product would sell at a loss.</p>
+            <p className="mt-2 text-xs text-warning">The target sale price is below the purchase price — this product would sell at a loss.</p>
           )}
         </Step>
       </div>

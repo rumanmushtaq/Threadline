@@ -1,14 +1,15 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Store } from "lucide-react";
+import { HandCoins, Plus, Store } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatMoney } from "@/lib/format";
@@ -17,20 +18,74 @@ import { SIZE_LABEL, type Size } from "@/lib/sizes";
 import { recordSaleSchema, type RecordSaleInput } from "@/lib/validation/sale";
 import { recordShopSaleAction } from "./actions";
 
-type Option = { id: string; sku: string; name: string; sellingPriceMinor: number; sizes: { size: Size; available: number }[] };
+export type SaleOption = { id: string; sku: string; name: string; sellingPriceMinor: number; sizes: { size: Size; available: number }[] };
 
 /** "Record shop sale": for cash sales in the shop. Stock goes down and the sale counts at once. */
-export function RecordSale({ options, currency, today }: { options: Option[]; currency: string; today: string }) {
-  const router = useRouter();
+export function RecordSale({ options, currency, today }: { options: SaleOption[]; currency: string; today: string }) {
   const [open, setOpen] = useState(false);
-  const blank = { productId: "", size: undefined, quantity: 1, unitPrice: undefined, soldOn: today, note: "" } as unknown as RecordSaleInput;
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>
+        <Plus /> Record shop sale
+      </Button>
+      <RecordSaleDialog options={options} currency={currency} today={today} open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
+/** "Sold" button for one product: opens the sale form with that product already chosen. */
+export function SoldButton({ option, currency, today, size = "sm" }: { option: SaleOption | undefined; currency: string; today: string; size?: "sm" | "default" }) {
+  const [open, setOpen] = useState(false);
+  if (!option) {
+    return (
+      <Button variant="outline" size={size} disabled title="No pieces left to sell">
+        <HandCoins /> Sold
+      </Button>
+    );
+  }
+  return (
+    <>
+      <Button variant="outline" size={size} onClick={() => setOpen(true)} aria-label={`Record a sale of ${option.name}`}>
+        <HandCoins /> Sold
+      </Button>
+      {open && <RecordSaleDialog options={[option]} productId={option.id} currency={currency} today={today} open onOpenChange={setOpen} />}
+    </>
+  );
+}
+
+export function RecordSaleDialog(props: {
+  options: SaleOption[];
+  currency: string;
+  today: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Chosen up front (the "Sold" button): the product picker is replaced by the product itself. */
+  productId?: string;
+}) {
+  const { options, currency, today, open, onOpenChange: setOpen } = props;
+  const router = useRouter();
+  const fixed = props.productId ? options.find((o) => o.id === props.productId) : undefined;
+  const blank = {
+    productId: fixed?.id ?? "",
+    size: fixed?.sizes.length === 1 ? fixed.sizes[0].size : undefined,
+    quantity: 1,
+    unitPrice: fixed ? fixed.sellingPriceMinor / 100 : undefined,
+    soldOn: today,
+    note: "",
+  } as unknown as RecordSaleInput;
   const form = useForm<RecordSaleInput>({ resolver: zodResolver(recordSaleSchema), defaultValues: blank });
   const [productId, size, quantity, unitPrice] = useWatch({ control: form.control, name: ["productId", "size", "quantity", "unitPrice"] });
   const product = options.find((o) => o.id === productId);
   const available = product?.sizes.find((s) => s.size === size)?.available;
   const errors = form.formState.errors;
 
+  // Selling under the target price needs a reason, so the owner can see why later.
+  const belowBy = product && Number.isFinite(unitPrice) ? product.sellingPriceMinor - Math.round(unitPrice * 100) : 0;
+
   const submit = form.handleSubmit(async (values) => {
+    if (belowBy > 0 && !values.note?.trim()) {
+      return form.setError("note", { message: "Write why it sold below the target sale price" }, { shouldFocus: true });
+    }
     const res = await recordShopSaleAction(values);
     if (!res.ok) return applyServerErrors(res, form.setError);
     toast.success(`Sale ${res.data.saleNumber} recorded`, { description: `${values.quantity} × ${res.data.productName}` });
@@ -41,15 +96,10 @@ export function RecordSale({ options, currency, today }: { options: Option[]; cu
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus /> Record shop sale
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Store className="size-5" /> Record shop sale
+            {fixed ? <HandCoins className="size-5" /> : <Store className="size-5" />} {fixed ? "Mark as sold" : "Record shop sale"}
           </DialogTitle>
           <DialogDescription>For pieces sold in person. Stock goes down and the sale counts in sales and profit.</DialogDescription>
         </DialogHeader>
@@ -58,36 +108,46 @@ export function RecordSale({ options, currency, today }: { options: Option[]; cu
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No product has pieces in stock. Add stock first.</p>
         ) : (
           <form id="record-sale" onSubmit={submit} className="space-y-4" noValidate>
-            <div className="space-y-1.5">
-              <Label htmlFor="sale-product">Product</Label>
-              <Controller
-                control={form.control}
-                name="productId"
-                render={({ field }) => (
-                  <Select
-                    value={field.value ?? ""}
-                    onValueChange={(v) => {
-                      field.onChange(v);
-                      const p = options.find((o) => o.id === v);
-                      form.setValue("size", (p?.sizes.length === 1 ? p.sizes[0].size : undefined) as Size, { shouldValidate: false });
-                      if (p) form.setValue("unitPrice", p.sellingPriceMinor / 100);
-                    }}
-                  >
-                    <SelectTrigger id="sale-product" className="w-full" aria-invalid={!!errors.productId}>
-                      <SelectValue placeholder="Choose a product" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options.map((o) => (
-                        <SelectItem key={o.id} value={o.id}>
-                          {o.name} <span className="font-mono text-xs text-muted-foreground">{o.sku}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              {errors.productId && <p className="text-xs text-destructive">{errors.productId.message}</p>}
-            </div>
+            {fixed ? (
+              <div className="rounded-lg border bg-muted/40 px-3 py-2.5">
+                <p className="font-medium">{fixed.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-mono">{fixed.sku}</span> · target {formatMoney(fixed.sellingPriceMinor, currency)} ·{" "}
+                  {fixed.sizes.reduce((n, s) => n + s.available, 0)} in stock
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="sale-product">Product</Label>
+                <Controller
+                  control={form.control}
+                  name="productId"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ?? ""}
+                      onValueChange={(v) => {
+                        field.onChange(v);
+                        const p = options.find((o) => o.id === v);
+                        form.setValue("size", (p?.sizes.length === 1 ? p.sizes[0].size : undefined) as Size, { shouldValidate: false });
+                        if (p) form.setValue("unitPrice", p.sellingPriceMinor / 100);
+                      }}
+                    >
+                      <SelectTrigger id="sale-product" className="w-full" aria-invalid={!!errors.productId}>
+                        <SelectValue placeholder="Choose a product" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.map((o) => (
+                          <SelectItem key={o.id} value={o.id}>
+                            {o.name} <span className="font-mono text-xs text-muted-foreground">{o.sku}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.productId && <p className="text-xs text-destructive">{errors.productId.message}</p>}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -125,12 +185,16 @@ export function RecordSale({ options, currency, today }: { options: Option[]; cu
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="sale-price">Sold for (each)</Label>
+                <Label htmlFor="sale-price">Sell price (each)</Label>
                 <div className="relative">
                   <span className="pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-sm text-muted-foreground">{currency}</span>
                   <Input id="sale-price" type="number" min={0} step="0.01" inputMode="decimal" className="pl-11" aria-invalid={!!errors.unitPrice} {...form.register("unitPrice", { valueAsNumber: true })} />
                 </div>
-                {errors.unitPrice && <p className="text-xs text-destructive">{errors.unitPrice.message}</p>}
+                {errors.unitPrice ? (
+                  <p className="text-xs text-destructive">{errors.unitPrice.message}</p>
+                ) : (
+                  product && <p className="text-xs text-muted-foreground">Target {formatMoney(product.sellingPriceMinor, currency)} · product prices stay the same</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="sale-date">Sale date</Label>
@@ -140,9 +204,24 @@ export function RecordSale({ options, currency, today }: { options: Option[]; cu
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="sale-note">Note (optional)</Label>
-              <Input id="sale-note" placeholder="e.g. paid cash, discount for regular customer" maxLength={200} {...form.register("note")} />
-              {errors.note && <p className="text-xs text-destructive">{errors.note.message}</p>}
+              <Label htmlFor="sale-note">{belowBy > 0 ? "Note: reason for the lower price" : "Note (optional)"}</Label>
+              <Textarea
+                id="sale-note"
+                rows={2}
+                placeholder={belowBy > 0 ? "e.g. regular customer discount, small stain, sold on credit" : "e.g. paid cash"}
+                maxLength={200}
+                aria-invalid={!!errors.note}
+                {...form.register("note")}
+              />
+              {errors.note ? (
+                <p className="text-xs text-destructive">{errors.note.message}</p>
+              ) : (
+                belowBy > 0 && (
+                  <p className="text-xs text-warning">
+                    {formatMoney(belowBy, currency)} below the target sale price per piece. A reason is required.
+                  </p>
+                )
+              )}
             </div>
 
             {product && Number.isFinite(unitPrice) && Number.isFinite(quantity) && quantity > 0 && (

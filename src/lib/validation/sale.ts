@@ -7,7 +7,7 @@ export const recordSaleSchema = z.object({
   size: z.enum(SIZES, { error: "Choose a size" }),
   quantity: z.number({ error: "Enter a quantity" }).int("Use a whole number").min(1, "At least 1").max(1000, "That is too many"),
   unitPrice: z
-    .number({ error: "Enter the price it sold for" })
+    .number({ error: "Enter the sell price" })
     .finite()
     .min(0, "Cannot be negative")
     .max(10_000_000, "That price is too high")

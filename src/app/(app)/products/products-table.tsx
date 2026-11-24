@@ -18,6 +18,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatMoney } from "@/lib/format";
 import { AUDIENCE_LABEL, type Audience } from "@/lib/sizes";
+import { type SaleOption, SoldButton } from "../sales/record-sale";
 import { regenerateImagesAction } from "./actions";
 
 type Row = {
@@ -48,8 +49,11 @@ export function ProductsTable(props: {
   threshold: number;
   currency: string;
   appUrl: string;
+  /** Set when the user may record sales: adds a "Sold" button to each row. */
+  sale: { options: SaleOption[]; today: string } | null;
 }) {
-  const { rows, threshold, currency } = props;
+  const { rows, threshold, currency, sale } = props;
+  const sold = (r: Row) => sale && <SoldButton option={sale.options.find((o) => o.id === r.id)} currency={currency} today={sale.today} />;
   return (
     <div className="space-y-4">
       <div className="hidden overflow-hidden rounded-xl border bg-card md:block">
@@ -61,10 +65,10 @@ export function ProductsTable(props: {
               <TableHead>Sizes</TableHead>
               <TableHead>Stock</TableHead>
               <TableHead className="text-right">Cost</TableHead>
-              <TableHead className="text-right">Price</TableHead>
+              <TableHead className="text-right">Target price</TableHead>
               <TableHead>AI photos</TableHead>
               <TableHead>Link</TableHead>
-              <TableHead className="w-10" />
+              <TableHead className={sale ? "w-32" : "w-10"} />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -101,7 +105,10 @@ export function ProductsTable(props: {
                   <LinkStatus active={!!r.linkActive && r.isPublished} />
                 </TableCell>
                 <TableCell>
-                  <RowActions row={r} appUrl={props.appUrl} />
+                  <div className="flex items-center justify-end gap-1">
+                    {sold(r)}
+                    <RowActions row={r} appUrl={props.appUrl} />
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -127,10 +134,13 @@ export function ProductsTable(props: {
                 <StockBadge available={r.available} threshold={threshold} />
                 <AiStatusBadge status={r.aiStatus} />
               </div>
-              <p className="text-sm tabular">
-                {formatMoney(r.sellingPriceMinor, currency)}
-                <span className="text-xs text-muted-foreground"> · cost {formatMoney(r.purchasePriceMinor, currency)}</span>
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm tabular">
+                  {formatMoney(r.sellingPriceMinor, currency)}
+                  <span className="text-xs text-muted-foreground"> · cost {formatMoney(r.purchasePriceMinor, currency)}</span>
+                </p>
+                {sold(r)}
+              </div>
             </div>
           </div>
         ))}

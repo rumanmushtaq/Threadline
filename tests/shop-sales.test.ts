@@ -22,7 +22,7 @@ const make = async () =>
 const sizeRow = async (productId: string, size: "M" | "L") =>
   (await db.select().from(productSizes).where(eq(productSizes.productId, productId))).find((s) => s.size === size)!;
 const allTime = resolveRange({ range: "all_time" });
-const sale = (productId: string, over: Record<string, unknown> = {}) => ({ productId, size: "M", quantity: 2, unitPrice: 1400, soldOn: businessToday(), ...over });
+const sale = (productId: string, over: Record<string, unknown> = {}) => ({ productId, size: "M", quantity: 2, unitPrice: 1400, soldOn: businessToday(), note: "regular customer", ...over });
 
 describe("recording shop sales", () => {
   it("takes pieces out of stock and counts price, cost and profit", async () => {
@@ -75,11 +75,20 @@ describe("recording shop sales", () => {
     await expect(recordShopSale(db, ids.adminId, sale(p.id, { quantity: 0 }))).rejects.toThrow(/fix the highlighted/);
     await expect(recordShopSale(db, ids.adminId, sale(p.id, { unitPrice: -5 }))).rejects.toThrow(/fix the highlighted/);
     await expect(recordShopSale(db, ids.adminId, sale(p.id, { unitPrice: 10.555 }))).rejects.toThrow(/fix the highlighted/);
+    await expect(recordShopSale(db, ids.adminId, sale(p.id, { note: "" }))).rejects.toThrow(/below the target sale price/);
+    await expect(recordShopSale(db, ids.adminId, sale(p.id, { note: "   " }))).rejects.toThrow(/below the target sale price/);
     await expect(recordShopSale(db, ids.adminId, sale("00000000-0000-4000-8000-000000000000"))).rejects.toThrow(/Product not found/);
     await setProductArchived(db, ids.adminId, p.id, true);
     await expect(recordShopSale(db, ids.adminId, sale(p.id))).rejects.toThrow(/archived/);
     expect(await db.select().from(shopSales)).toHaveLength(0);
     expect((await sizeRow(p.id, "M")).onHand).toBe(5);
+  });
+
+  it("needs no note at or above the target sale price", async () => {
+    const p = await make();
+    await recordShopSale(db, ids.adminId, sale(p.id, { unitPrice: 1500, note: "" }));
+    await recordShopSale(db, ids.adminId, sale(p.id, { unitPrice: 1800, note: "" }));
+    expect(await db.select().from(shopSales)).toHaveLength(2);
   });
 
   it("never sells pieces held for a website order", async () => {

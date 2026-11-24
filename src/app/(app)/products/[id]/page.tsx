@@ -10,6 +10,8 @@ import { formatDateTime, formatMoney, formatPercent } from "@/lib/format";
 import { AUDIENCE_LABEL } from "@/lib/sizes";
 import { availableProviders, PROVIDER_LABEL } from "@/server/ai/provider";
 import { requirePageUser } from "@/server/auth/current";
+import { can } from "@/server/auth/permissions";
+import { businessToday } from "@/server/date-range";
 import { db } from "@/server/db";
 import { stockHistory } from "@/server/inventory";
 import { getProductDetail, productHistory } from "@/server/products";
@@ -32,7 +34,7 @@ const TXN_LABEL: Record<string, string> = {
 };
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
-  await requirePageUser("product.view");
+  const user = await requirePageUser("product.view");
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const [product, settings] = await Promise.all([getProductDetail(db, id), getSettings(db)]);
@@ -47,6 +49,17 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const profit = product.sellingPriceMinor - product.purchasePriceMinor;
   const latestJob = product.jobs[0];
   const siteUrl = appUrl();
+  const inStock = product.sizes.filter((s) => s.onHand - s.reserved > 0);
+  const sale =
+    can(user.role, "sale.record") && product.status === "active"
+      ? {
+          option: inStock.length
+            ? { id: product.id, sku: product.sku, name: product.name, sellingPriceMinor: product.sellingPriceMinor, sizes: inStock.map((s) => ({ size: s.size, available: s.onHand - s.reserved })) }
+            : undefined,
+          currency: cur,
+          today: businessToday(),
+        }
+      : null;
 
   return (
     <div className="space-y-6">
@@ -78,6 +91,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             providers={availableProviders().map((name) => ({ name, label: PROVIDER_LABEL[name] }))}
             sku={product.sku}
             history={salesHistory}
+            sale={sale}
           />
         </div>
       </div>
@@ -95,9 +109,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           </section>
 
           <section className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border">
-            <Stat label="Selling price" value={formatMoney(product.sellingPriceMinor, cur)} />
+            <Stat label="Target sale price" value={formatMoney(product.sellingPriceMinor, cur)} />
             <Stat label="Purchase price" value={formatMoney(product.purchasePriceMinor, cur)} note="internal" />
-            <Stat label="Profit per piece" value={formatMoney(profit, cur)} note={formatPercent(profit / product.sellingPriceMinor) + " margin"} />
+            <Stat label="Target profit per piece" value={formatMoney(profit, cur)} note={formatPercent(profit / product.sellingPriceMinor) + " margin"} />
             <Stat label="Est. gross profit (on hand)" value={formatMoney(profit * onHand, cur)} note="estimate" />
             <Stat label="Purchase value (on hand)" value={formatMoney(product.purchasePriceMinor * onHand, cur)} />
             <Stat label="Potential sales value" value={formatMoney(product.sellingPriceMinor * onHand, cur)} />

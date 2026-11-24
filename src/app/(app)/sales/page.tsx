@@ -84,7 +84,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
                 <TableHead>Product</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="text-right">Sold for</TableHead>
+                <TableHead className="text-right">Sell price</TableHead>
                 <TableHead className="text-right">Cost</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-right">Profit</TableHead>

@@ -35,7 +35,7 @@ export const productInputSchema = z
     quantity: wholeNumber("total quantity").min(1, "Quantity must be at least 1").max(QUANTITY_MAX),
     sizes: z.array(sizeQuantitySchema),
     purchasePrice: money("purchase price").nonnegative("Cannot be negative"),
-    sellingPrice: money("selling price").positive("Selling price must be above 0"),
+    sellingPrice: money("target sale price").positive("Target sale price must be above 0"),
   })
   .superRefine((v, ctx) => {
     const allowed = SIZES_BY_AUDIENCE[v.audience];
@@ -65,7 +65,7 @@ export const productUpdateSchema = z.object({
   description: productInputSchema.shape.description,
   categoryId: z.uuid().nullable(),
   purchasePrice: money("purchase price").nonnegative("Cannot be negative"),
-  sellingPrice: money("selling price").positive("Selling price must be above 0"),
+  sellingPrice: money("target sale price").positive("Target sale price must be above 0"),
 });
 
 /** Live numbers shown in the form and stored nowhere: estimates, not realized profit. */

@@ -72,7 +72,7 @@ export function EditProductForm({
       <div className="grid gap-4 sm:grid-cols-2">
         {(["purchasePrice", "sellingPrice"] as const).map((k) => (
           <div key={k} className="space-y-2">
-            <Label htmlFor={k}>{k === "purchasePrice" ? "Purchase price per piece" : "Selling price per piece"}</Label>
+            <Label htmlFor={k}>{k === "purchasePrice" ? "Purchase price per piece" : "Target sale price per piece"}</Label>
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground">{currency}</span>
               <Input id={k} type="number" step="0.01" min={0} className="pl-11 tabular" aria-invalid={!!errors[k]} {...form.register(k, { valueAsNumber: true })} />
